@@ -26,6 +26,8 @@ from pathlib import Path
 
 import pandas as pd
 import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from config import GITHUB_TOKEN, DATA_RAW
@@ -33,6 +35,16 @@ from config import GITHUB_TOKEN, DATA_RAW
 HEADERS = {"Accept": "application/vnd.github+json"}
 if GITHUB_TOKEN:
     HEADERS["Authorization"] = f"Bearer {GITHUB_TOKEN}"
+
+SESSION = requests.Session()
+retry_strategy = Retry(
+    total=5,
+    backoff_factor=2,
+    status_forcelist=[429, 500, 502, 503, 504],
+    allowed_methods=["GET"],
+)
+SESSION.mount("https://", HTTPAdapter(max_retries=retry_strategy))
+SESSION.headers.update(HEADERS)
 
 CONTRIB_PER_PAGE = 100
 MAX_CONTRIB_PAGES = 3        # up to 300 contributors per repo
@@ -50,17 +62,30 @@ def _wait(resp):
 
 # ───────────────────────────── Part A: Contributors ──────────────────────────
 
+def _get_with_retry(url, params=None, max_retries=5):
+    """GET with manual retry for ConnectionError on top of urllib3 retry."""
+    for attempt in range(max_retries):
+        try:
+            return SESSION.get(url, params=params, timeout=30)
+        except (requests.ConnectionError, requests.Timeout) as exc:
+            wait = min(2 ** (attempt + 1), 120)
+            print(f"  ⚠️  Connection error (attempt {attempt+1}/{max_retries}): {exc!r}")
+            print(f"      Retrying in {wait}s …")
+            time.sleep(wait)
+    return SESSION.get(url, params=params, timeout=30)
+
+
 def fetch_contributors(repo_full_name):
     """Return list of (login, contributions) for a repo."""
     results = []
     for page in range(1, MAX_CONTRIB_PAGES + 1):
         url = f"https://api.github.com/repos/{repo_full_name}/contributors"
         params = {"per_page": CONTRIB_PER_PAGE, "page": page}
-        resp = requests.get(url, headers=HEADERS, params=params)
+        resp = _get_with_retry(url, params=params)
         _wait(resp)
         if resp.status_code == 403:
             time.sleep(60)
-            resp = requests.get(url, headers=HEADERS, params=params)
+            resp = _get_with_retry(url, params=params)
         if resp.status_code != 200:
             break
         items = resp.json()
@@ -126,7 +151,7 @@ def _save_contrib(rows, path):
 
 def fetch_user_location(login):
     url = f"https://api.github.com/users/{login}"
-    resp = requests.get(url, headers=HEADERS)
+    resp = _get_with_retry(url)
     _wait(resp)
     if resp.status_code != 200:
         return {"login": login, "location": "", "name": "",
