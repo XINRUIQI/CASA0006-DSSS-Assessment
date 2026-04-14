@@ -159,7 +159,7 @@ def build_adoption_events(gh_prom, contrib, user_city, first_event_map):
             real_month = first_event_map.get((repo, owner))
             city_project[repo][city] = real_month if real_month else int(cm)
 
-    # Contributors
+    # Source 1: Contributors API records (commit-based contributors)
     for _, row in contrib.iterrows():
         repo = row["repo_full_name"]
         login = row["contributor_login"]
@@ -186,8 +186,24 @@ def build_adoption_events(gh_prom, contrib, user_city, first_event_map):
         if city not in city_project[repo] or contrib_month < city_project[repo][city]:
             city_project[repo][city] = contrib_month
 
+    # Source 2: Participation events (includes PR-only contributors
+    # not captured by the Contributors API)
+    pr_only_added = 0
+    for (repo, login), event_month in first_event_map.items():
+        if login not in user_city:
+            continue
+        if repo not in repo_created:
+            continue
+        city = user_city[login]
+        if city not in city_project.get(repo, {}):
+            city_project[repo][city] = event_month
+            pr_only_added += 1
+        elif event_month < city_project[repo][city]:
+            city_project[repo][city] = event_month
+
     print(f"    Participation event hits: {api_hits}, "
-          f"fallback approximations: {api_misses}")
+          f"fallback approximations: {api_misses}, "
+          f"PR-only additions: {pr_only_added}")
 
     # --- Build event rows ---
     rows = []

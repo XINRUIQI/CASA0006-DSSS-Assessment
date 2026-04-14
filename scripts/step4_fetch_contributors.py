@@ -248,7 +248,8 @@ def fetch_missing_locations(all_logins):
 
 MAX_COMMIT_PAGES = 50   # cap: 5 000 commits per repo
 MAX_PR_PAGES = 20       # cap: 2 000 PRs per repo
-CHECKPOINT_EVERY = 50   # save progress every N repos
+CHECKPOINT_EVERY = 10   # save progress every N repos
+LOG_EVERY = 50          # print detailed log every N repos
 
 
 def _strict_wait(resp):
@@ -348,6 +349,54 @@ def _save_events(rows, path):
         w.writerows(rows)
 
 
+def _build_target_repo_set():
+    """
+    Pre-filter: find repos that have at least one contributor in a
+    target city.  Repos with no target-city contributor are skipped
+    to save ~30% of API calls.  Pure local computation.
+    """
+    from step3b_clean_and_map_locations import (
+        _build_city_dict, clean_location, match_city,
+    )
+    from config import DATA_PROCESSED
+
+    contrib_path = DATA_RAW / "github" / "github_repo_contributors.csv"
+    loc_path = DATA_RAW / "github" / "github_owner_locations.csv"
+    city_path = DATA_PROCESSED / "city_list.csv"
+
+    if not all(p.exists() for p in [contrib_path, loc_path, city_path]):
+        return None  # can't filter, process all
+
+    cities = pd.read_csv(city_path, dtype=str)
+    city_set = set(cities["matched_city"].str.strip().tolist())
+
+    loc = pd.read_csv(loc_path, dtype=str).fillna("")
+    _build_city_dict()
+    user_city = set()
+    for _, row in loc.iterrows():
+        raw = row["location"]
+        if not raw.strip():
+            continue
+        cleaned = clean_location(raw)
+        if cleaned is None:
+            continue
+        result = match_city(cleaned)
+        if result and result[0] in city_set:
+            user_city.add(row["login"])
+
+    contrib = pd.read_csv(contrib_path, dtype=str)
+    relevant = contrib[contrib["contributor_login"].isin(user_city)]
+    target_repos = set(relevant["repo_full_name"].unique())
+
+    # Also include repos whose OWNER is in a target city
+    gh = pd.read_csv(DATA_RAW / "github" / "github_candidates.csv", dtype=str)
+    prom = gh[gh["prominent_flag"] == "1"]
+    owner_repos = prom[prom["owner_login"].isin(user_city)]["repo_full_name"]
+    target_repos.update(owner_repos.tolist())
+
+    return target_repos
+
+
 def collect_participation_events():
     """
     For each prominent repo, build a participation chain:
@@ -356,11 +405,28 @@ def collect_participation_events():
       3. 'pr_opened' events from PRs API (each author's first PR)
 
     For each (repo, actor), only the earliest event is kept.
+
+    Optimizations:
+      - Pre-filter to repos with target-city contributors (~30% fewer calls)
+      - Checkpoint every CHECKPOINT_EVERY repos
+      - Graceful KeyboardInterrupt handling (saves before exit)
     """
     gh_csv = DATA_RAW / "github" / "github_candidates.csv"
     df = pd.read_csv(gh_csv, dtype=str)
     prominent = df[df["prominent_flag"] == "1"].copy()
-    repos = prominent["repo_full_name"].dropna().unique().tolist()
+    all_repos = prominent["repo_full_name"].dropna().unique().tolist()
+
+    # Pre-filter: only repos with target-city contributors
+    print("  Pre-filtering repos with target-city contributors …")
+    target_repos = _build_target_repo_set()
+    if target_repos is not None:
+        repos = [r for r in all_repos if r in target_repos]
+        skipped = len(all_repos) - len(repos)
+        print(f"  Target-city repos: {len(repos)} "
+              f"(skipping {skipped} repos with no target-city contributors)")
+    else:
+        repos = all_repos
+        print(f"  Could not pre-filter, processing all {len(repos)} repos")
 
     # Repo metadata for 'create' events
     repo_meta = {}
@@ -386,49 +452,59 @@ def collect_participation_events():
         return
 
     rows = list(existing_rows)
-    total_api_calls = [0]
     start_time = time.time()
+    interrupted = False
 
-    for i, repo in enumerate(todo, 1):
-        # --- Create event (from CSV, no API call) ---
-        meta = repo_meta.get(repo, {})
-        actor_events = {}  # login → (date, type)
-        owner = meta.get("owner", "")
-        created = meta.get("created_at", "")
-        if owner and created:
-            actor_events[owner] = (created, "create")
+    try:
+        for i, repo in enumerate(todo, 1):
+            # --- Create event (from CSV, no API call) ---
+            meta = repo_meta.get(repo, {})
+            actor_events = {}  # login → (date, type)
+            owner = meta.get("owner", "")
+            created = meta.get("created_at", "")
+            if owner and created:
+                actor_events[owner] = (created, "create")
 
-        # --- Commits (serial, rate-limited) ---
-        commit_authors = _fetch_repo_commits(repo)
-        for login, date in commit_authors.items():
-            if login not in actor_events or date < actor_events[login][0]:
-                actor_events[login] = (date, "commit")
+            # --- Commits (serial, rate-limited) ---
+            commit_authors = _fetch_repo_commits(repo)
+            for login, date in commit_authors.items():
+                if login not in actor_events or date < actor_events[login][0]:
+                    actor_events[login] = (date, "commit")
 
-        # --- PRs (serial, rate-limited) ---
-        pr_authors = _fetch_repo_prs(repo)
-        for login, date in pr_authors.items():
-            if login not in actor_events or date < actor_events[login][0]:
-                actor_events[login] = (date, "pr_opened")
+            # --- PRs (serial, rate-limited) ---
+            pr_authors = _fetch_repo_prs(repo)
+            for login, date in pr_authors.items():
+                if login not in actor_events or date < actor_events[login][0]:
+                    actor_events[login] = (date, "pr_opened")
 
-        # --- Append rows ---
-        for login, (date, etype) in actor_events.items():
-            rows.append([repo, login, date, etype])
+            # --- Append rows ---
+            for login, (date, etype) in actor_events.items():
+                rows.append([repo, login, date, etype])
 
-        # --- Progress & checkpoint ---
-        if i % CHECKPOINT_EVERY == 0 or i == len(todo):
-            elapsed = time.time() - start_time
-            rate = i / elapsed * 3600 if elapsed > 0 else 0
-            eta_h = (len(todo) - i) / rate if rate > 0 else 0
-            print(f"  [{i}/{len(todo)}] {repo}: "
-                  f"{len(commit_authors)} commit authors, "
-                  f"{len(pr_authors)} PR authors  "
-                  f"({rate:.0f} repos/hr, ETA {eta_h:.1f}h)")
-            _save_events(rows, out_path)
+            # --- Checkpoint (frequent saves to minimize data loss) ---
+            if i % CHECKPOINT_EVERY == 0 or i == len(todo):
+                _save_events(rows, out_path)
 
-    _save_events(rows, out_path)
-    total_actors = len(rows)
-    print(f"\n✅ Participation events: {total_actors} rows "
-          f"across {len(done_repos) + len(todo)} repos")
+            # --- Progress log ---
+            if i % LOG_EVERY == 0 or i == len(todo):
+                elapsed = time.time() - start_time
+                rate = i / elapsed * 3600 if elapsed > 0 else 0
+                eta_h = (len(todo) - i) / rate if rate > 0 else 0
+                print(f"  [{i}/{len(todo)}] {repo}: "
+                      f"{len(commit_authors)} commits, "
+                      f"{len(pr_authors)} PRs  "
+                      f"({rate:.0f} repos/hr, ETA {eta_h:.1f}h)")
+
+    except KeyboardInterrupt:
+        interrupted = True
+        print(f"\n  ⚠️  Interrupted! Saving progress ({i}/{len(todo)} done) …")
+        _save_events(rows, out_path)
+        print(f"  ✅ Progress saved. Re-run to resume from repo #{i}.")
+
+    if not interrupted:
+        total_actors = len(rows)
+        print(f"\n✅ Participation events: {total_actors} rows "
+              f"across {len(done_repos) + len(todo)} repos")
 
 
 # ──────────────────────────────── Main ───────────────────────────────────────
