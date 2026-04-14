@@ -1,0 +1,151 @@
+city,country,population_million,gdp_per_capita,education_tertiary_pct,internet_users_pct,rd_expenditure_pct,research_capacity,timezone_utc,region
+Beijing,China,21.5,12720,60.0,73.0,2.55,3,8.0,East Asia
+San Francisco,United States,4.7,76330,88.2,92.0,3.46,2,-8.0,North America
+Shanghai,China,24.9,12720,60.0,73.0,2.55,2,8.0,East Asia
+Singapore,Singapore,5.9,65640,91.0,96.0,1.93,2,7.0,Southeast Asia
+New York,United States,20.1,76330,88.2,92.0,3.46,3,-5.0,North America
+Hong Kong,China,7.5,12720,60.0,73.0,2.55,3,7.5,East Asia
+Hangzhou,China,12.2,12720,60.0,73.0,2.55,1,8.0,East Asia
+London,United Kingdom,9.6,46125,62.0,95.0,2.9,5,0.0,Europe
+Shenzhen,China,17.6,12720,60.0,73.0,2.55,1,7.5,East Asia
+Paris,France,12.3,42330,67.0,92.0,2.22,4,0.0,Europe
+Palo Alto,United States,0.07,76330,88.2,92.0,3.46,1,-8.0,North America
+Tokyo,Japan,37.4,33815,65.5,93.0,3.26,3,9.5,East Asia
+Seattle,United States,4.0,76330,88.2,92.0,3.46,1,-8.0,North America
+Los Angeles,United States,13.2,76330,88.2,92.0,3.46,2,-8.0,North America
+Seoul,South Korea,9.9,32255,98.0,97.6,4.93,3,8.5,East Asia
+Bengaluru,India,12.3,2485,30.0,52.0,0.65,1,5.0,South Asia
+Berlin,Germany,3.6,51380,72.0,93.0,3.13,2,1.0,Europe
+Cambridge,United Kingdom,0.16,46125,62.0,95.0,2.9,2,0.0,Europe
+Guangzhou,China,18.7,12720,60.0,73.0,2.55,1,7.5,East Asia
+Zurich,Switzerland,1.4,91930,63.0,96.0,3.37,2,0.5,Europe
+Toronto,Canada,6.2,52080,75.0,93.0,1.69,2,-5.5,North America
+Vancouver,Canada,2.6,52080,75.0,93.0,1.69,1,-8.0,North America
+Nanjing,China,9.4,12720,60.0,73.0,2.55,1,8.0,East Asia
+Pittsburgh,United States,2.4,76330,88.2,92.0,3.46,1,-5.5,North America
+Munich,Germany,1.6,51380,72.0,93.0,3.13,2,1.0,Europe
+Amsterdam,Netherlands,1.2,57025,88.0,95.0,2.32,1,0.5,Europe
+Boston,United States,4.9,76330,88.2,92.0,3.46,3,-4.5,North America
+Chengdu,China,21.0,12720,60.0,73.0,2.55,1,7.0,East Asia
+Austin,United States,2.3,76330,88.2,92.0,3.46,1,-6.5,North America
+Barcelona,Spain,5.6,30120,93.0,93.0,1.44,1,0.0,Europe
+Sydney,Australia,5.3,63530,113.0,96.0,1.68,2,10.0,Oceania
+California,United States,39.5,76330,88.2,92.0,3.46,0,-8.0,North America
+Copenhagen,Denmark,1.4,67790,82.0,98.0,2.85,1,1.0,Europe
+Berkeley,United States,0.12,76330,88.2,92.0,3.46,1,-8.0,North America
+Melbourne,Australia,5.1,63530,113.0,96.0,1.68,2,9.5,Oceania
+New Delhi,India,16.8,2485,30.0,52.0,0.65,1,5.0,South Asia
+Montreal,Canada,4.3,52080,75.0,93.0,1.69,1,-5.0,North America
+Chicago,United States,9.6,76330,88.2,92.0,3.46,1,-6.0,North America
+Oxford,United Kingdom,0.15,46125,62.0,95.0,2.9,1,0.0,Europe
+Oregon,United States,4.2,76330,88.2,92.0,3.46,0,-8.0,North America
+Stockholm,Sweden,1.6,55870,76.0,97.0,3.4,1,1.0,Europe
+Lisbon,Portugal,2.9,24570,72.0,84.0,1.69,1,-0.5,Europe
+San Diego,United States,3.3,76330,88.2,92.0,3.46,1,-8.0,North America
+Atlanta,United States,6.1,76330,88.2,92.0,3.46,1,-5.5,North America
+Wuhan,China,12.3,12720,60.0,73.0,2.55,1,7.5,East Asia
+Taipei,Taiwan,7.0,32756,84.0,90.0,3.76,1,8.0,East Asia
+Xi'an,China,13.0,12720,60.0,73.0,2.55,1,7.5,East Asia
+Redmond,United States,0.07,76330,88.2,92.0,3.46,0,-8.0,North America
+Madrid,Spain,6.7,30120,93.0,93.0,1.44,1,0.0,Europe
+Washington,United States,6.3,76330,88.2,92.0,3.46,1,-5.0,North America
+San Jose,United States,2.0,76330,88.2,92.0,3.46,0,-8.0,North America
+Dallas,United States,7.6,76330,88.2,92.0,3.46,0,-6.5,North America
+Dubai,United Arab Emirates,3.5,49450,33.0,99.0,1.3,0,3.5,Middle East
+Mountain View,United States,0.08,76330,88.2,92.0,3.46,0,-8.0,North America
+Istanbul,Turkey,15.6,10674,99.0,83.0,1.09,1,2.0,Middle East
+Cupertino,United States,0.06,76330,88.2,92.0,3.46,0,-8.0,North America
+Tel Aviv,Israel,4.1,52170,63.0,90.0,5.44,1,2.5,Middle East
+Philadelphia,United States,6.2,76330,88.2,92.0,3.46,1,-5.0,North America
+Ottawa,Canada,1.0,52080,75.0,93.0,1.69,0,-5.0,North America
+Hefei,China,9.4,12720,60.0,73.0,2.55,1,8.0,East Asia
+Aachen,Germany,0.25,51380,72.0,93.0,3.13,1,0.5,Europe
+Abu Dhabi,United Arab Emirates,1.5,49450,33.0,99.0,1.3,0,3.5,Middle East
+Hamburg,Germany,1.9,51380,72.0,93.0,3.13,0,0.5,Europe
+Mumbai,India,20.7,2485,30.0,52.0,0.65,1,5.0,South Asia
+Prague,Czech Republic,1.3,27220,66.0,88.0,1.95,1,1.0,Europe
+Hanoi,Vietnam,8.4,4164,28.5,79.0,0.43,1,7.0,Southeast Asia
+Tianjin,China,13.9,12720,60.0,73.0,2.55,0,8.0,East Asia
+Baltimore,United States,2.8,76330,88.2,92.0,3.46,0,-5.0,North America
+Daejeon,South Korea,1.5,32255,98.0,97.6,4.93,1,8.5,East Asia
+Pune,India,7.4,2485,30.0,52.0,0.65,1,5.0,South Asia
+Warsaw,Poland,1.8,18320,67.0,87.0,1.44,1,1.5,Europe
+Vienna,Austria,2.0,52085,90.0,93.0,3.2,1,1.0,Europe
+Hyderabad,India,10.0,2485,30.0,52.0,0.65,1,5.0,South Asia
+Champaign,United States,0.09,76330,88.2,92.0,3.46,1,-6.0,North America
+Rome,Italy,4.3,34085,64.0,90.0,1.43,1,1.0,Europe
+Dublin,Ireland,1.4,103685,78.0,92.0,1.23,1,-0.5,Europe
+Ho Chi Minh City,Vietnam,9.3,4164,28.5,79.0,0.43,0,7.0,Southeast Asia
+Santa Clara,United States,0.13,76330,88.2,92.0,3.46,0,-8.0,North America
+Lahore,Pakistan,13.0,1470,10.0,36.5,0.22,0,5.0,South Asia
+Jakarta,Indonesia,10.6,4788,36.0,66.0,0.28,1,7.0,Southeast Asia
+Cairo,Egypt,21.3,3635,35.0,72.0,0.96,1,2.0,Middle East
+Mars,France,0.015,42330,67.0,92.0,2.22,0,0.5,Europe
+Chongqing,China,32.1,12720,60.0,73.0,2.55,0,7.0,East Asia
+Ahmedabad,India,8.3,2485,30.0,52.0,0.65,0,5.0,South Asia
+Helsinki,Finland,1.3,50550,93.0,96.0,2.94,1,1.5,Europe
+Princeton,United States,0.03,76330,88.2,92.0,3.46,1,-5.0,North America
+Menlo Park,United States,0.035,76330,88.2,92.0,3.46,0,-8.0,North America
+Houston,United States,7.1,76330,88.2,92.0,3.46,0,-6.5,North America
+Sofia,Bulgaria,1.3,13980,79.0,80.0,0.85,0,1.5,Europe
+Catania,Italy,0.31,34085,64.0,90.0,1.43,0,1.0,Europe
+Karlsruhe,Germany,0.31,51380,72.0,93.0,3.13,1,0.5,Europe
+Sunnyvale,United States,0.16,76330,88.2,92.0,3.46,0,-8.0,North America
+Suzhou,China,12.7,12720,60.0,73.0,2.55,0,8.0,East Asia
+Brisbane,Australia,2.6,63530,113.0,96.0,1.68,1,10.0,Oceania
+Karachi,Pakistan,16.1,1470,10.0,36.5,0.22,0,4.5,South Asia
+Hsinchu,Taiwan,0.45,32756,84.0,90.0,3.76,1,8.0,East Asia
+Bangkok,Thailand,10.7,7066,49.0,88.0,1.34,1,6.5,Southeast Asia
+Miami,United States,6.2,76330,88.2,92.0,3.46,0,-5.5,North America
+Milan,Italy,3.2,34085,64.0,90.0,1.43,1,0.5,Europe
+Moscow,Russia,12.6,11480,82.0,88.0,1.1,1,2.5,Europe
+Lviv,Ukraine,0.72,4535,82.0,75.0,0.41,0,1.5,Europe
+Denver,United States,2.9,76330,88.2,92.0,3.46,0,-7.0,North America
+Cleveland,United States,2.1,76330,88.2,92.0,3.46,0,-5.5,North America
+Harbin,China,10.0,12720,60.0,73.0,2.55,0,8.5,East Asia
+Lausanne,Switzerland,0.42,91930,63.0,96.0,3.37,1,0.5,Europe
+Sandwell,United Kingdom,0.33,46125,62.0,95.0,2.9,0,0.0,Europe
+Edinburgh,United Kingdom,0.54,46125,62.0,95.0,2.9,2,0.0,Europe
+Kunming,China,8.5,12720,60.0,73.0,2.55,0,7.0,East Asia
+Ankara,Turkey,5.7,10674,99.0,83.0,1.09,0,2.0,Middle East
+Florida,United States,22.2,76330,88.2,92.0,3.46,0,-5.5,North America
+Chennai,India,10.9,2485,30.0,52.0,0.65,1,5.5,South Asia
+Shenyang,China,9.1,12720,60.0,73.0,2.55,0,8.0,East Asia
+Kathmandu,Nepal,1.5,1336,14.0,52.0,0.3,0,5.5,South Asia
+Urbana,United States,0.04,76330,88.2,92.0,3.46,1,-6.0,North America
+Islamabad,Pakistan,1.2,1470,10.0,36.5,0.22,0,5.0,South Asia
+Cambridge,United States,0.16,76330,88.2,92.0,3.46,2,-4.5,North America
+Athens,Greece,3.2,20867,143.0,83.0,1.46,0,1.5,Europe
+Tallinn,Estonia,0.45,28310,70.0,92.0,1.76,0,1.5,Europe
+Kuala Lumpur,Malaysia,8.0,12570,43.0,97.0,1.04,1,7.0,Southeast Asia
+Budapest,Hungary,1.8,18390,47.0,89.0,1.62,0,1.5,Europe
+Orlando,United States,2.7,76330,88.2,92.0,3.46,0,-5.5,North America
+Nuremberg,Germany,0.52,51380,72.0,93.0,3.13,0,0.5,Europe
+Kyoto,Japan,1.5,33815,65.5,93.0,3.26,1,9.0,East Asia
+Ann Arbor,United States,0.37,76330,88.2,92.0,3.46,1,-5.5,North America
+Geneva,Switzerland,0.64,91930,63.0,96.0,3.37,1,0.5,Europe
+Addis Ababa,Ethiopia,5.2,1020,9.0,25.0,0.27,0,2.5,Africa
+Zhuhai,China,2.4,12720,60.0,73.0,2.55,0,7.5,East Asia
+Hildesheim,Germany,0.1,51380,72.0,93.0,3.13,0,0.5,Europe
+Kolkata,India,15.1,2485,30.0,52.0,0.65,1,6.0,South Asia
+Kansas City,United States,2.2,76330,88.2,92.0,3.46,0,-6.5,North America
+Phoenix,United States,4.9,76330,88.2,92.0,3.46,0,-7.5,North America
+England,United Kingdom,56.5,46125,62.0,95.0,2.9,0,0.0,Europe
+Jinan,China,9.2,12720,60.0,73.0,2.55,0,8.0,East Asia
+Utrecht,Netherlands,0.36,57025,88.0,95.0,2.32,0,0.5,Europe
+Belgrade,Serbia,1.7,9530,73.0,81.0,0.99,0,1.5,Europe
+Bellevue,United States,0.15,76330,88.2,92.0,3.46,0,-8.0,North America
+Dalian,China,7.5,12720,60.0,73.0,2.55,0,8.0,East Asia
+Wroclaw,Poland,0.64,18320,67.0,87.0,1.44,0,1.0,Europe
+Delft,Netherlands,0.1,57025,88.0,95.0,2.32,1,0.5,Europe
+Delhi,India,16.8,2485,30.0,52.0,0.65,1,5.0,South Asia
+Sao Paulo,Brazil,22.0,8920,55.0,84.0,1.16,1,-3.0,Latin America
+College Park,United States,0.03,76330,88.2,92.0,3.46,1,-5.0,North America
+Waterloo,Canada,0.58,52080,75.0,93.0,1.69,1,-5.5,North America
+Xiamen,China,5.3,12720,60.0,73.0,2.55,0,8.0,East Asia
+Boulder,United States,0.33,76330,88.2,92.0,3.46,1,-7.0,North America
+Chapel Hill,United States,0.06,76330,88.2,92.0,3.46,1,-5.5,North America
+Saint Louis,United States,2.8,76330,88.2,92.0,3.46,0,-6.0,North America
+Tempe,United States,0.19,76330,88.2,92.0,3.46,0,-7.5,North America
+Texas,United States,30.0,76330,88.2,92.0,3.46,0,-6.5,North America
+Edmonton,Canada,1.1,52080,75.0,93.0,1.69,0,-7.5,North America

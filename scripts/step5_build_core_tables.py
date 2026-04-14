@@ -3,10 +3,11 @@ Step 5 – Build three core analysis tables from collected data.
 
 Prerequisites
 -------------
-- data/raw/github/github_candidates.csv          (from step 1a)
-- data/raw/github/github_repo_contributors.csv    (from step 4)
-- data/raw/github/github_owner_locations.csv      (from step 3a + step 4)
-- data/processed/city_list.csv                    (from step 3d)
+- data/raw/github/github_candidates.csv                    (from step 1a)
+- data/raw/github/github_repo_contributors.csv             (from step 4)
+- data/raw/github/github_repo_participation_events.csv     (from step 4, Part C)
+- data/raw/github/github_owner_locations.csv               (from step 3a + step 4)
+- data/processed/city_list.csv                             (from step 3d)
 
 Outputs (all in data/output/)
 -------
@@ -21,6 +22,8 @@ Logic overview
 - "collaboration edge" = two cities share contributors on the same project
 - "origination" = the city of the repo owner at creation time
 - All timestamps are aggregated to YYYYMM monthly granularity.
+- Participation events from Commits/PRs API (step 4 Part C) provide real
+  first-event dates; created_month+1 approximation is used as fallback.
 """
 
 import sys
@@ -80,7 +83,24 @@ def load_data():
     city_set = set(cities["matched_city"].str.strip().tolist())
     print(f"    Target cities: {len(city_set)}")
 
-    return gh_prom, contrib, loc, cities, city_set
+    # 5. Participation events (from step 4 Part C – Commits/PRs API)
+    pe_path = DATA_RAW / "github" / "github_repo_participation_events.csv"
+    if pe_path.exists():
+        pe_df = pd.read_csv(pe_path, dtype=str)
+        first_event_map = {}
+        for _, row in pe_df.iterrows():
+            m = _to_month(row.get("first_event_at", ""))
+            if m:
+                key = (row["repo_full_name"], row["actor_login"])
+                if key not in first_event_map or m < first_event_map[key]:
+                    first_event_map[key] = m
+        print(f"    Participation events loaded: {len(first_event_map)}")
+    else:
+        first_event_map = {}
+        print("    ⚠️  No participation events file found. "
+              "Will use approximation for adoption lag.")
+
+    return gh_prom, contrib, loc, cities, city_set, first_event_map
 
 
 def build_user_city_map(loc_df, city_set):
@@ -110,29 +130,25 @@ def build_user_city_map(loc_df, city_set):
 # Table 1: city_project_adoption_events
 # ═══════════════════════════════════════════════════════════════════════════════
 
-def build_adoption_events(gh_prom, contrib, user_city):
+def build_adoption_events(gh_prom, contrib, user_city, first_event_map):
     """
     For each (city, project) pair, determine:
       - whether the city is the originator (owner city at creation)
       - the first month a contributor from that city appeared
       - the adoption lag relative to global origin month
+
+    Uses real participation event dates from Commits/PRs API when available;
+    falls back to created_month / created_month+1 approximation otherwise.
     """
     print("\n  Building city_project_adoption_events …")
 
-    # --- Map repo owner to city ---
     repo_owner = dict(zip(gh_prom["repo_full_name"], gh_prom["owner_login"]))
     repo_created = dict(zip(gh_prom["repo_full_name"],
                             gh_prom["created_month"].astype("Int64")))
 
-    # --- For each project, collect which cities have contributors ---
-    # city_first_seen[repo][city] = created_month (as approximation)
-    # We don't have per-commit timestamps via the contributors endpoint,
-    # so we approximate:
-    #   - owner's city gets the creation month
-    #   - other contributors' cities get creation month + 1 (conservative)
-    #     (since contributors joined after creation)
-
     city_project = defaultdict(dict)  # repo → {city: first_month}
+    api_hits = 0
+    api_misses = 0
 
     # Owner = originator
     for repo in gh_prom["repo_full_name"]:
@@ -140,7 +156,8 @@ def build_adoption_events(gh_prom, contrib, user_city):
         cm = repo_created.get(repo)
         if owner in user_city and cm and not pd.isna(cm):
             city = user_city[owner]
-            city_project[repo][city] = int(cm)
+            real_month = first_event_map.get((repo, owner))
+            city_project[repo][city] = real_month if real_month else int(cm)
 
     # Contributors
     for _, row in contrib.iterrows():
@@ -155,14 +172,22 @@ def build_adoption_events(gh_prom, contrib, user_city):
         if cm is None or pd.isna(cm):
             continue
         cm = int(cm)
-        # If city not yet recorded, or this is earlier, update
-        # Approximate: non-owner contributors assigned creation_month + 1
-        approx_month = cm if (login == repo_owner.get(repo)) else cm + 1
-        # Fix month overflow: 202213 → 202301
-        if approx_month % 100 > 12:
-            approx_month = (approx_month // 100 + 1) * 100 + 1
-        if city not in city_project[repo] or approx_month < city_project[repo][city]:
-            city_project[repo][city] = approx_month
+
+        real_month = first_event_map.get((repo, login))
+        if real_month:
+            contrib_month = real_month
+            api_hits += 1
+        else:
+            contrib_month = cm if (login == repo_owner.get(repo)) else cm + 1
+            if contrib_month % 100 > 12:
+                contrib_month = (contrib_month // 100 + 1) * 100 + 1
+            api_misses += 1
+
+        if city not in city_project[repo] or contrib_month < city_project[repo][city]:
+            city_project[repo][city] = contrib_month
+
+    print(f"    Participation event hits: {api_hits}, "
+          f"fallback approximations: {api_misses}")
 
     # --- Build event rows ---
     rows = []
@@ -393,11 +418,11 @@ def main():
     print("Step 5: Build three core analysis tables")
     print("=" * 60)
 
-    gh_prom, contrib, loc, cities, city_set = load_data()
+    gh_prom, contrib, loc, cities, city_set, first_event_map = load_data()
     user_city = build_user_city_map(loc, city_set)
 
     # Table 1
-    adoption_df = build_adoption_events(gh_prom, contrib, user_city)
+    adoption_df = build_adoption_events(gh_prom, contrib, user_city, first_event_map)
 
     # Table 2
     edges_agg, edges_monthly = build_collaboration_edges(gh_prom, contrib, user_city)
