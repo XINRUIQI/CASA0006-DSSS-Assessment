@@ -397,7 +397,7 @@ def _build_target_repo_set():
     return target_repos
 
 
-def collect_participation_events():
+def collect_participation_events(shard_id=None, shard_total=None):
     """
     For each prominent repo, build a participation chain:
       1. 'create' event from candidates CSV (owner + created_at)
@@ -408,6 +408,7 @@ def collect_participation_events():
 
     Optimizations:
       - Pre-filter to repos with target-city contributors (~30% fewer calls)
+      - Sharding: split work across multiple processes (--shard N/M)
       - Checkpoint every CHECKPOINT_EVERY repos
       - Graceful KeyboardInterrupt handling (saves before exit)
     """
@@ -428,6 +429,11 @@ def collect_participation_events():
         repos = all_repos
         print(f"  Could not pre-filter, processing all {len(repos)} repos")
 
+    # Apply sharding: each shard takes a deterministic slice
+    if shard_id is not None and shard_total is not None:
+        repos = [r for i, r in enumerate(repos) if i % shard_total == (shard_id - 1)]
+        print(f"  Shard {shard_id}/{shard_total}: {len(repos)} repos assigned")
+
     # Repo metadata for 'create' events
     repo_meta = {}
     for _, r in prominent.iterrows():
@@ -436,7 +442,12 @@ def collect_participation_events():
             "created_at": r.get("created_at", ""),
         }
 
-    out_path = DATA_RAW / "github" / "github_repo_participation_events.csv"
+    # Shard-specific or default output path
+    if shard_id is not None:
+        out_path = (DATA_RAW / "github" /
+                    f"github_repo_participation_events_s{shard_id}.csv")
+    else:
+        out_path = DATA_RAW / "github" / "github_repo_participation_events.csv"
     done_repos = set()
     existing_rows = []
     if out_path.exists():
@@ -507,31 +518,105 @@ def collect_participation_events():
               f"across {len(done_repos) + len(todo)} repos")
 
 
+# ──────────────────────────────── Shard merge ────────────────────────────────
+
+def merge_shard_files():
+    """Merge shard CSVs into the final participation_events file."""
+    import glob as globmod
+    pattern = str(DATA_RAW / "github" / "github_repo_participation_events_s*.csv")
+    shard_files = sorted(globmod.glob(pattern))
+    if not shard_files:
+        print("  No shard files found.")
+        return
+
+    out_path = DATA_RAW / "github" / "github_repo_participation_events.csv"
+    all_rows = []
+    seen = set()
+    for f in shard_files:
+        df = pd.read_csv(f, dtype=str)
+        for _, row in df.iterrows():
+            key = (row["repo_full_name"], row["actor_login"])
+            if key not in seen:
+                seen.add(key)
+                all_rows.append(row.tolist())
+        print(f"  Loaded {len(df)} rows from {Path(f).name}")
+
+    _save_events(all_rows, out_path)
+    print(f"\n✅ Merged {len(all_rows)} rows → "
+          f"github_repo_participation_events.csv")
+
+
 # ──────────────────────────────── Main ───────────────────────────────────────
 
 def main():
+    import argparse
+    parser = argparse.ArgumentParser(description="Step 4: Fetch contributors")
+    parser.add_argument(
+        "--shard", type=str, default=None, metavar="N/M",
+        help="Run only shard N of M (e.g. --shard 1/2). "
+             "Each shard writes its own file. Use --merge after all shards finish.")
+    parser.add_argument(
+        "--merge", action="store_true",
+        help="Merge shard files into final participation_events.csv")
+    parser.add_argument(
+        "--part-c-only", action="store_true",
+        help="Skip Part A/B, only run Part C (participation chain)")
+    args = parser.parse_args()
+
+    # Parse shard spec
+    shard_id, shard_total = None, None
+    if args.shard:
+        try:
+            n, m = args.shard.split("/")
+            shard_id, shard_total = int(n), int(m)
+            assert 1 <= shard_id <= shard_total
+        except (ValueError, AssertionError):
+            print("❌ --shard must be N/M where 1 ≤ N ≤ M, e.g. --shard 1/2")
+            sys.exit(1)
+
+    # Merge mode
+    if args.merge:
+        print("=" * 60)
+        print("Merging shard files")
+        print("=" * 60)
+        merge_shard_files()
+        return
+
     print("=" * 60)
-    print("Step 4: Fetch contributors & their locations")
+    if shard_id:
+        print(f"Step 4: Shard {shard_id}/{shard_total}")
+    else:
+        print("Step 4: Fetch contributors & their locations")
     print("=" * 60)
 
     if not GITHUB_TOKEN:
         print("⚠️  GITHUB_TOKEN not set. Will be heavily rate-limited.\n"
               "   export GITHUB_TOKEN='ghp_…' before running.")
 
-    # Part A: get contributor lists for all prominent repos
-    all_logins = collect_all_contributors()
+    if not args.part_c_only:
+        # Part A: get contributor lists for all prominent repos
+        all_logins = collect_all_contributors()
 
-    # Part B: fetch locations for new contributors
-    fetch_missing_locations(all_logins)
+        # Part B: fetch locations for new contributors
+        fetch_missing_locations(all_logins)
+    else:
+        print("  Skipping Part A/B (--part-c-only)")
 
     # Part C: build participation chain (Commits + PRs)
     print("\n" + "-" * 60)
     print("Part C: Building participation chain (Commits API + PRs API)")
+    if shard_id:
+        print(f"         Shard {shard_id} of {shard_total}")
     print("-" * 60)
-    collect_participation_events()
+    collect_participation_events(shard_id=shard_id, shard_total=shard_total)
 
     print("\n" + "=" * 60)
-    print("Step 4 complete. Ready for step 5 (build core tables).")
+    if shard_id:
+        print(f"Shard {shard_id}/{shard_total} complete.")
+        if shard_total > 1:
+            print("After ALL shards finish, run:  python step4_fetch_contributors.py --merge")
+    else:
+        print("Step 4 complete. Ready for step 5 (build core tables).")
     print("=" * 60)
 
 
