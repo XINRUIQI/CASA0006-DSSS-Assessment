@@ -227,6 +227,13 @@ def build_adoption_events(gh_prom, contrib, user_city, first_event_map):
             })
 
     df = pd.DataFrame(rows)
+
+    neg_count = (df["lag"] < 0).sum()
+    if neg_count > 0:
+        df = df[df["lag"] >= 0].reset_index(drop=True)
+        print(f"    Excluded {neg_count} events with negative lag "
+              "(forked repos / code migrations with inherited commit histories)")
+
     print(f"    Adoption events: {len(df)} rows "
           f"({df['city'].nunique()} cities, {df['project_id'].nunique()} projects)")
     return df

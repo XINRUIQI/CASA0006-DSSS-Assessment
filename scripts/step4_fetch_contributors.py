@@ -84,7 +84,8 @@ def _get_with_retry(url, params=None, max_retries=5):
     for attempt in range(max_retries):
         try:
             return session.get(url, params=params, timeout=30)
-        except (requests.ConnectionError, requests.Timeout) as exc:
+        except (requests.ConnectionError, requests.Timeout,
+                requests.exceptions.ChunkedEncodingError) as exc:
             wait = min(2 ** (attempt + 1), 120)
             print(f"  ⚠️  Connection error (attempt {attempt+1}/{max_retries}): {exc!r}")
             print(f"      Retrying in {wait}s …")
