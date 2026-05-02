@@ -34,20 +34,25 @@ def main():
     print(f"  Total location records: {len(df)}")
     print(f"  High/medium confidence: {len(confident)}")
 
-    # Only GitHub entities (HF authors mostly lack location)
-    gh_conf = confident[confident["platform"] == "GitHub"]
-    print(f"  GitHub high/medium:     {len(gh_conf)}")
+    # Include both GitHub and Hugging Face entities. HF authors used to be
+    # excluded (no location was available) but step3a_hf_fetch_user_locations.py
+    # now resolves locations via manual dictionary + same-name GitHub lookup,
+    # so HF authors can legitimately contribute to the city list.
+    confident = confident[confident["platform"].isin(["GitHub", "HuggingFace"])]
+    print(f"  GitHub + HF high/medium: {len(confident)}")
+    print(f"    GitHub: {(confident['platform']=='GitHub').sum()}")
+    print(f"    HF    : {(confident['platform']=='HuggingFace').sum()}")
 
     # Filter out suspicious city names (2 chars or fewer, like "Eu", "Us")
-    gh_conf = gh_conf[gh_conf["matched_city"].str.len() > 2]
+    confident = confident[confident["matched_city"].str.len() > 2]
 
     # Convert lat/lon to numeric before aggregation
-    gh_conf["lat"] = pd.to_numeric(gh_conf["lat"], errors="coerce")
-    gh_conf["lon"] = pd.to_numeric(gh_conf["lon"], errors="coerce")
+    confident["lat"] = pd.to_numeric(confident["lat"], errors="coerce")
+    confident["lon"] = pd.to_numeric(confident["lon"], errors="coerce")
 
     # Group by city name + country ONLY (not lat/lon) to merge duplicates
     city_counts = (
-        gh_conf.groupby(["matched_city", "country"])
+        confident.groupby(["matched_city", "country"])
         .agg(
             entity_count=("entity_id", "nunique"),
             lat=("lat", "mean"),

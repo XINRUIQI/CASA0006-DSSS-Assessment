@@ -73,7 +73,7 @@ COUNTRY_NORM = {
     "საქართველო": "Georgia",
     "Қазақстан": "Kazakhstan", "Беларусь": "Belarus",
     "پاکستان": "Pakistan",
-    "نेपाल": "Nepal", "नेपाल": "Nepal",
+    "नेपाल": "Nepal", "नेपाल": "Nepal",
     "বাংলাদেশ": "Bangladesh",
     "Maroc ⵍⵎⵖⵔⵉⴱ المغرب": "Morocco",
     "ኢትዮጵያ": "Ethiopia",

@@ -429,22 +429,46 @@ def main():
             })
         print(f"  GitHub owner records: {len(gh)}")
 
-    # HF authors – extract unique authors from prominent HF projects
-    hf_path = DATA_RAW / "huggingface" / "hf_candidates.csv"
-    if hf_path.exists():
-        hf = pd.read_csv(hf_path, dtype=str).fillna("")
-        hf_prom = hf[hf["prominent_flag"] == "1"]
-        hf_authors = hf_prom[["author"]].drop_duplicates()
-        for _, row in hf_authors.iterrows():
+    # HF authors – read locations resolved by step3a_hf_fetch_user_locations.py
+    # (HF API does not expose location, so we rely on a hand-curated dictionary
+    # for top orgs + same-name GitHub matching + GitHub API fallback).
+    hf_loc_path = DATA_RAW / "huggingface" / "hf_author_locations.csv"
+    if hf_loc_path.exists():
+        hf_loc = pd.read_csv(hf_loc_path, dtype=str).fillna("")
+        for _, row in hf_loc.iterrows():
             author = row["author"]
-            if author:
-                records.append({
-                    "entity_id": author,
-                    "entity_type": "hf_author",
-                    "raw_location": "",  # HF API doesn't expose user location
-                    "platform": "HuggingFace",
-                })
-        print(f"  HF author records: {len(hf_authors)}")
+            if not author:
+                continue
+            entity_kind = row.get("entity_type", "") or "user"
+            records.append({
+                "entity_id": author,
+                "entity_type": "hf_" + entity_kind,
+                "raw_location": row.get("raw_location", ""),
+                "platform": "HuggingFace",
+            })
+        print(f"  HF author records (from hf_author_locations.csv): "
+              f"{len(hf_loc)}")
+    else:
+        # Fallback: emit empty raw_location so step3b is still runnable
+        # before step3a has been executed. Will yield zero matched cities.
+        hf_path = DATA_RAW / "huggingface" / "hf_candidates.csv"
+        if hf_path.exists():
+            hf = pd.read_csv(hf_path, dtype=str).fillna("")
+            hf_prom = hf[hf["prominent_flag"] == "1"]
+            hf_authors = hf_prom[["author"]].drop_duplicates()
+            for _, row in hf_authors.iterrows():
+                author = row["author"]
+                if author:
+                    records.append({
+                        "entity_id": author,
+                        "entity_type": "hf_author",
+                        "raw_location": "",
+                        "platform": "HuggingFace",
+                    })
+            print(f"  ⚠️  No hf_author_locations.csv found; "
+                  f"falling back to empty raw_location for "
+                  f"{len(hf_authors)} HF authors. "
+                  f"Run step3a_hf_fetch_user_locations.py first.")
 
     print(f"  Total raw records: {len(records)}\n")
 
