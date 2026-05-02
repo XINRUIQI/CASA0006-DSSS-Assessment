@@ -86,6 +86,18 @@ COUNTRY_DATA = {
     "Serbia":               ( 9530, 73.0, 81.0, 0.99),
     "Ethiopia":             (1020,  9.0, 25.0, 0.27),
     "Saudi Arabia":         (32586, 70.0, 99.0, 0.80),
+    "Norway":               (87925, 82.0, 98.0, 2.28),
+    "Mexico":               (13650, 43.0, 77.0, 0.28),
+    "Argentina":            (13710, 108.0, 87.0, 0.46),
+    "New Zealand":          (48780, 77.0, 96.0, 1.37),
+    "Chile":                (16265, 105.0, 90.0, 0.34),
+    "Colombia":             ( 6340, 56.0, 73.0, 0.29),
+    "Peru":                 ( 7050, 70.0, 71.0, 0.13),
+    "Romania":              (17000, 51.0, 84.0, 0.47),
+    "South Africa":         ( 6190, 24.0, 72.0, 0.83),
+    "Kenya":                ( 1840, 12.0, 40.0, 0.79),
+    "Nigeria":              ( 1560, 10.0, 36.0, 0.13),
+    "Philippines":          ( 3670, 36.0, 53.0, 0.16),
 }
 
 # ═════════════════════════════════════════════════════════════════════════════
@@ -116,7 +128,7 @@ CITY_POPULATION = {
     "Cleveland": 2.1, "Urbana": 0.04, "Cambridge": 0.12,
     "College Park": 0.03, "Orlando": 2.7, "Kansas City": 2.2,
     "Bellevue": 0.15, "Chapel Hill": 0.06, "Saint Louis": 2.8,
-    "Tempe": 0.19,
+    "Tempe": 0.19, "Raleigh": 1.60, "Detroit": 4.39,
 
     # --- United States (state-level entries → use largest city as proxy) ---
     "California": 39.5, "Oregon": 4.2, "Florida": 22.2, "Texas": 30.0,
@@ -159,11 +171,11 @@ CITY_POPULATION = {
     "Bucharest": 1.8, "Wroclaw": 0.64,
 
     # --- Middle East ---
-    "Istanbul": 15.6, "Ankara": 5.7, "Tel Aviv": 4.1,
+    "Istanbul": 15.6, "Ankara": 5.7,     "Tel Aviv": 4.1, "Haifa": 1.0, "Jerusalem": 0.97,
     "Dubai": 3.5, "Abu Dhabi": 1.5, "Riyadh": 7.7,
 
     # --- East / Southeast Asia ---
-    "Tokyo": 37.4, "Osaka": 19.3, "Kyoto": 1.5, "Nagoya": 9.5,
+    "Tokyo": 37.4, "Osaka": 19.3, "Kyoto": 1.5, "Nagoya": 9.5, "Tsukuba": 0.25,
     "Seoul": 9.9, "Busan": 3.4, "Daejeon": 1.5,
     "Taipei": 7.0, "Hsinchu": 0.45,
     "Singapore": 5.9,
