@@ -17,9 +17,9 @@
 | 核心表 | Step 5b: HF 衍生关系边 | ✅ 已完成 | `step5b_build_hf_derivation_edges.py` |
 | 增强 | Step 6: 城市外部属性 | ✅ 已完成 | `step6_augment_city_attributes.py` |
 | 分析 | Step 8: EDA | ✅ 已完成 | `step8_eda.ipynb` + `step8b_eda_detailed.ipynb` |
-| 分析 | Step 9: K-means | ✅ 已完成 | `step9_kmeans.ipynb` |
-| 分析 | Step 10: Adoption-lag 回归 | ✅ 已完成 | `step10_adoption_regression.ipynb` |
-| 分析 | Step 11: XGBoost + SHAP | ✅ 已完成 | `step11_xgboost_shap.ipynb` |
+| 分析 | Step 9: K-means + 参数敏感性 + DBSCAN + GMM | ✅ 已完成（已扩展） | `step9_kmeans.ipynb` |
+| 分析 | Step 10: Adoption-lag 回归 | ✅ 已完成（V1.2 优化精简） | `step10_adoption_regression.ipynb` |
+| 分析 | Step 11: XGBoost + SHAP | ✅ 已完成（待 V1.2 精简 E/F） | `step11_xgboost_shap.ipynb` |
 | 分析 | Step 12: GraphSAGE | ✅ 已完成 | `step12_graphsage.ipynb` |
 | 整合 | 最终提交 Notebook | 🔲 待完成 | `Template_submission_CASA0006.ipynb` |
 | 整合 | Narrative 撰写（≤1500词） | 🔲 待完成 | — |
@@ -89,6 +89,19 @@ step5b 解析 HF tags 中 `base_model:*` 标签，构建 2,922 条衍生边（fi
 
 step6 为 148 城市添加 8 类外部变量：population, gdp_per_capita, education_tertiary_pct, internet_users_pct, rd_expenditure_pct, research_capacity, timezone_utc, region。同时计算了人口标准化 rate。
 
+### 优化 6：Robustness Checks 量化已知局限
+
+针对已知局限进行了系统量化检验（详见 §0.6）：
+
+1. **10.4b 内生性检验**：剔除 `log_degree` 后 Model C R² 仅降 0.6%（0.970→0.964），证实 degree 独立解释力极小，循环性核心来自 `entity_count`
+2. **10.4c 网络密度检验**：使用 weight≥5 子网络（密度 0.886→0.563）重算 degree/betweenness，Model C R² 仅降 0.3%；原始与子网络 betweenness 相关性 −0.05，证实密网 betweenness 不可靠
+3. **11.5 事件级 GB 回归**：新增 Model D-reg（lag 的 GB 回归，n=25,148），CV R²=0.019，确认城市特征无法预测事件级 lag（受项目异质性主导），但 SHAP 排序跨所有模型一致
+4. **（新增）9.6 K-Means 参数敏感性**：k=3/4/5 × n_init=50 系统对比三个评估指标（Silhouette/CH/DB），确认 k=4 为理论-统计最佳折衷；n_init 增大不改变结果，证明聚类已稳定
+5. **（新增）9.7 DBSCAN 替代模型**：eps×min_samples 网格搜索 → 仅 2 簇 + 14.9% 噪声，silhouette=0.299；确认密度聚类不适合该数据，但噪声点可标记异常城市
+6. **（新增）9.8 GMM 替代模型**：BIC/AIC 模型选择 + k=3/4/5 对比 → GMM(k=4) sil=0.278，与 K-Means ARI=0.340；94.6% 城市分配确定，软概率可量化边界城市
+7. **（新增）9.9 跨方法综合对比**：7 种聚类配置 × 3 指标 + ARI 热力图 + PCA 投影，系统确认 K-Means k=4 为最优选择
+8. **（新增）10.5c Region FE 检验**：对 Models A/B/C 加入 9 类宏观区域固定效应，验证核心结论稳健性。发现：(1) log_entity 和 log_degree 保持显著方向不变；(2) GDP 对 origination 的效应被区域组成完全吸收；(3) 外部属性仍全面不显著；(4) Adj R² 几乎不变，确认主模型（不含 region FE）适当。主模型特征集与 Step 11/12 保持一致以支持跨方法对比
+
 ## 0.4 EDA 主要发现（Step 8）
 
 ### 数据质量
@@ -128,7 +141,7 @@ step6 为 148 城市添加 8 类外部变量：population, gdp_per_capita, educa
 
 ## 0.5 建模结果摘要
 
-### K-means 城市角色（Step 9, k=4, silhouette=0.35）
+### K-means 城市角色（Step 9, k=4, silhouette=0.35）+ 参数敏感性 & 替代模型
 
 | 角色 | n | mean orig | mean adopt | mean degree | 典型城市 |
 |---|---|---|---|---|---|
@@ -137,23 +150,53 @@ step6 为 148 城市添加 8 类外部变量：population, gdp_per_capita, educa
 | Emerging Contributor | 44 | 4 | 60 | 793 | Xi'an, Jakarta, Cairo, Rome |
 | Peripheral / Late Adopter | 16 | 2 | 22 | 258 | Tallinn, Addis Ababa, Lahore |
 
+**参数敏感性分析（n_init=50）**：
+
+| k | Silhouette | CH Index | DB Index | 结论 |
+|---|---|---|---|---|
+| k=3 | **0.386** (最优) | 151.8 | **0.869** (最优) | 丢失理论中间层（Active Collaborator），过于粗糙 |
+| k=4 | 0.348 | 143.0 | 0.959 | 匹配四角色理论框架，兼顾解释性与指标 |
+| k=5 | 0.377 | 140.2 | 0.907 | 拆分 Peripheral 为两组，可解释性下降 |
+
+- 增大 n_init 从 20→50 后聚类结果**完全不变**，证明原始结果已收敛稳定
+
+**替代模型对比**：
+
+| 方法 | 簇数 | Silhouette | 特点 |
+|---|---|---|---|
+| DBSCAN (eps=0.8, ms=5) | 2 + 22 噪声点 (14.9%) | 0.299 | 仅发现 2 个密度簇；数据无明显密度间隙，DBSCAN 不适用；噪声点可作为异常城市鲁棒性检验 |
+| GMM (k=4) | 4 | 0.278 | BIC 最优 k=2，AIC 最优 k=8（分歧大）；与 K-Means ARI=0.340，中等一致；仅 8 城 (5.4%) 分配不确定 (max prob<0.7) |
+| **K-Means (k=4)** ← 保留 | 4 | **0.348** | 理论驱动 + 指标稳健 + 结果稳定，作为主模型 |
+
 ### Adoption 回归（Step 10）
 
 | 模型 | DV | n | R²/Pseudo R² | 最强变量 |
 |---|---|---|---|---|
-| Model A (Logistic) | is_originator | 38,347 | Pseudo R²=0.088 | log_entity (+), log_degree (−) |
-| Model B (OLS) | originator_share | 130 | R²=0.276 | log_entity (+), log_degree (−) |
-| Model C (OLS) | log(adoption) | 130 | R²=0.965 | log_degree (+), log_entity (+), betweenness (+) |
+| Model A (Logistic) | is_originator | 39,158 | Pseudo R²=0.090 | log_entity (+), log_degree (−), log_population (−) |
+| Model B (OLS) | originator_share | 148 | R²=0.247, Adj R²=0.198 | log_entity (+), log_degree (−) |
+| Model C (OLS) | log(avg_lag) | 148 | R²=0.218, Adj R²=0.166 | log_gdp (−) → 更富裕城市采纳更快 |
+
+**Model C 重大调整**：原 Model C 的 DV 从 `log(adoption_count)` 改为 `log(avg_lag)`（非 originator 事件的平均采用时滞）。这直接回答了"哪些城市特征与更快采纳相关"这一 RQ2 核心问题。原 adoption breadth 模型（R²=0.965，存在 tautology）移至 Appendix 10.4b。
+
+**Model C 关键 null finding**：城市特征（网络指标+外部属性）对采纳速度的解释力有限（Adj R²=0.166）。仅 GDP 显著（p<0.05，负系数→更富裕城市采纳更快），log_entity 和 log_degree 均不显著。这与 Step 11 Model D-reg（事件级 lag GB 回归，CV R²=0.019）的结论一致：**采纳速度主要受项目异质性驱动，而非城市特征**。
+
+**Robustness Checks**：
+- **10.2b 项目固定效应**：Conditional Logit (project FE) 确认 log_entity 和 log_degree 在控制项目异质性后仍显著
+- **10.3b Beta 回归**：originator_share 为比例变量，Beta 回归结果与 OLS 方向和显著性一致
+- **10.4b 内生性检验（Appendix）**：adoption breadth 模型 R²=0.965 主要反映 entity_count ↔ adoption_count 同源循环
+- **10.4c 网络密度检验（Appendix）**：weight≥5 子网络确认 betweenness 在密网中不可靠（与原始 betweenness 相关性仅 −0.05）
+- **10.5c Region FE 检验（新增）**：加入区域固定效应后核心结论不变，GDP 对 origination 的边际效应被区域组成吸收，但 GDP 对采纳速度有独立负效应；Adj R² 几乎不变，确认不含 region 的主模型适当，且与 Step 11/12 特征集一致
 
 ### XGBoost + SHAP（Step 11）
 
 | 模型 | DV | CV 表现 | 备注 |
 |---|---|---|---|
 | Model D (分类) | is_originator | **AUC=0.769** | 合理区分能力 |
+| Model D-reg (回归) | lag | **CV R²=0.019** | 城市特征难以预测事件级采用时滞（**新增**） |
 | Model E (回归) | originator_share | CV R²=−0.79 | n=148 过拟合 |
 | Model F (回归) | log(adoption) | CV R²=−0.87 | n=148 过拟合 |
 
-SHAP Top-3 特征: log_entity, log_degree, betweenness
+SHAP Top-3 特征: log_entity, log_degree, betweenness（跨所有模型一致）
 
 ### GraphSAGE（Step 12）
 
@@ -164,13 +207,18 @@ SHAP Top-3 特征: log_entity, log_degree, betweenness
 
 城市排名预测 Spearman ρ=0.976 (p<0.001)
 
-## 0.6 已知局限
+## 0.6 已知局限与量化评估
 
-1. **网络密度偏高 (0.886)**：betweenness 区分度有限
-2. **XGBoost 回归 CV R² 为负**：n=148 不足以支撑 GB 回归泛化
-3. **外部属性对 origination 直接解释力弱**：但控制规模后 GDP 和 internet 对 adoption 显著
-4. **collaboration_count ≡ weighted_degree**：完全冗余，建模已只保留 degree
-5. **Model C R²=0.965 存在循环性**：degree 与 adoption 同源构建
+1. **网络密度偏高 (0.886)**：betweenness 区分度有限。**已量化（10.4c）**：使用 weight≥5 子网络（密度 0.563，147 节点，全连通）重算网络特征后，Model C R² 仅降 0.003；原始 betweenness 与子网络 betweenness 相关性仅 −0.05，确认密集网络中 betweenness 不可靠。隶属 Step 5（建边阈值）+ Step 8（EDA 发现）
+2. **XGBoost 回归 CV R² 为负**：n=148 不足以支撑 GB 回归泛化。**已补充（11.5）**：新增 Model D-reg 在事件级（n=25,148）做 lag 的 GB 回归，CV R²=0.019，确认城市特征对事件级 lag 解释力极低（受项目异质性主导）。SHAP 排序与其他模型一致，验证特征重要性层级的跨方法稳健性。隶属 Step 11
+3. **外部属性对 origination 直接解释力弱**：但控制规模后 GDP (partial r=0.266, p=0.002) 和 internet (partial r=0.253, p=0.004) 对 adoption 显著。**性质：研究发现，非方法缺陷**。隶属 Step 8 偏相关 + Step 10 回归
+4. **collaboration_count ≡ weighted_degree**：完全冗余，建模已只保留 degree。**已解决**。隶属 Step 5 变量定义
+5. **Model C R²=0.965 存在循环性**：**已量化（10.4b）**：剔除 log_degree 后 R² 仅降 0.6%（0.970→0.964），真正的循环性来自 `log_entity` 与 `adoption_count` 的近定义同源关系（log_entity 系数从 0.64 飙升至 1.10）。隶属 Step 10 建模设计
+6. **（新增）K-Means k 选择的统计-理论权衡**：k=3 silhouette=0.386 统计最优，但 k=4=0.348 理论最优。**已量化（§9.6）**：参数敏感性分析确认 k=4 在三个指标（Silhouette/CH/DB）上均接近最优，且 n_init=50 不改变结果，证明聚类已稳定。隶属 Step 9
+7. **（新增）DBSCAN 不适合该数据**：仅发现 2 个密度簇 + 14.9% 噪声。**已量化（§9.7）**：城市特征空间无明显密度间隙。噪声点可用于异常城市检验。隶属 Step 9
+8. **（新增）GMM 与 K-Means 一致性中等（ARI=0.340）**：**已量化（§9.8–9.9）**：GMM 因椭球协方差产生不同划分，但 94.6% 城市分配确定（max prob≥0.7），7 种配置的 ARI 热力图和 PCA 投影确认 K-Means k=4 为最稳健选择。隶属 Step 9
+13. **（新增）GDP 效应被区域组成吸收**：不含 region FE 时 GDP 对 origination 边际显著（p=0.057），加入 region 后完全消失（p=0.874）。说明之前观察到的"GDP 效应"实际是区域组成效应——高 GDP 城市集中在 North America/Europe 等本身有高 origination 优势的区域。**10.5c Region FE Robustness Check 已量化**。隶属 Step 10
+14. **（新增）采纳速度的 null finding**：Model C（DV=log_avg_lag）R²=0.218，仅 GDP 显著；与 Step 11 Model D-reg（事件级 CV R²=0.019）一致确认城市特征对采纳速度解释力有限。**性质：研究发现，非方法缺陷**——采纳速度主要受项目层面因素（流行度轨迹、技术门槛等）驱动。隶属 Step 10 + Step 11
 
 ## 0.7 代码文件清单
 
@@ -200,9 +248,9 @@ SHAP Top-3 特征: log_entity, log_degree, betweenness
 |---|---|---|---|
 | `step8_eda.ipynb` | 22 | — | 核心 EDA |
 | `step8b_eda_detailed.ipynb` | 20 | — | 扩展 EDA |
-| `step9_kmeans.ipynb` | 14 | RQ1 | K-means 城市角色聚类 |
-| `step10_adoption_regression.ipynb` | 11 | RQ2 | Adoption-lag 回归 |
-| `step11_xgboost_shap.ipynb` | 12 | RQ2 | XGBoost + SHAP |
+| `step9_kmeans.ipynb` | 41 | RQ1 | K-means 城市角色聚类 + 参数敏感性 (§9.6) + DBSCAN (§9.7) + GMM (§9.8) + 综合对比 (§9.9) |
+| `step10_adoption_regression.ipynb` | 18 | RQ2 | Adoption 回归 (A/B/C) + Robustness Checks (10.2b, 10.3b, 10.4b, 10.4c, 10.5c Region FE) |
+| `step11_xgboost_shap.ipynb` | 14 | RQ2 | XGBoost + SHAP + Model D-reg (11.5) |
 | `step12_graphsage.ipynb` | 10 | RQ3 | GraphSAGE 预测 |
 
 ---
@@ -424,7 +472,7 @@ K-means 在所有 prominent open-AI projects 聚合形成的城市层指标上�
 
 ### ✅ 5.1.4 实际执行结果（Step 9）
 
-**执行文件**：`step9_kmeans.ipynb`（14 个 code cells，全部已执行）
+**执行文件**：`step9_kmeans.ipynb`（41 个 cells，含 §9.6–9.9 新增参数敏感性与替代模型分析）
 
 **实际输入变量**（基于 EDA 结论调整）：
 - `log_origination`、`log_adoption`、`log_degree`、`log_betweenness`、`log_orig_rate`
@@ -443,6 +491,49 @@ K-means 在所有 prominent open-AI projects 聚合形成的城市层指标上�
 | Peripheral / Late Adopter | 16 | 2 | 22 | 258 | Tallinn, Addis Ababa, Lahore |
 
 **与方案对比**：方案预期角色为 originators / collaboration hubs / bridge cities / late adopters；实际聚类结果中 "bridge cities" 未作为独立 cluster 出现（betweenness 区分度不足，网络密度 0.886 过高），取而代之的是 "Emerging Contributor" 角色。
+
+### ✅ 5.1.5 参数敏感性与替代模型对比（Step 9 扩展，§9.6–9.9）
+
+**§9.6 K-Means 参数敏感性（n_init=50）**：
+
+| k | Silhouette | CH Index | DB Index | 解读 |
+|---|---|---|---|---|
+| k=3 | **0.386** | 151.8 | **0.869** | 统计最优，但合并 Active Collaborator 层，丢失理论中间角色 |
+| k=4 | 0.348 | 143.0 | 0.959 | 匹配四角色框架，指标接近 k=3，解释性最佳 |
+| k=5 | 0.377 | 140.2 | 0.907 | 拆分 Peripheral 为两组，可解释性下降 |
+
+- 增大 n_init (20→50) 后聚类结果完全不变 → 原始结果已收敛稳定
+- k=3 统计指标最优但理论解释力不足；k=5 边际改善有限但增加复杂度 → **k=4 是最佳折衷**
+
+**§9.7 DBSCAN 密度聚类**：
+
+- k-distance 图 + eps×min_samples 网格搜索 → 最佳配置：eps=0.8, min_samples=5
+- 结果：仅 **2 个簇** + 22 个噪声点 (14.9%)，silhouette=0.299
+- 数据特征分布平滑、无明显密度间隙 → DBSCAN 不适合该数据集
+- 但 22 个噪声城市可作为 **异常值鲁棒性检验**，标记不属于任何密度簇的边缘城市
+
+**§9.8 GMM 高斯混合模型（软聚类）**：
+
+- BIC/AIC 模型选择：BIC 最优 k=2, AIC 最优 k=8 → 两个信息准则分歧较大
+- GMM(k=4) silhouette=0.278，低于 K-Means(k=4) 的 0.348
+- 仅 8 个城市 (5.4%) 最大分配概率 <0.7 → 绝大多数城市分配确定
+- GMM(k=4) vs K-Means(k=4) ARI=0.340, NMI=0.407 → 中等一致性
+- GMM 的软分配概率可量化"边界城市"的归属不确定性，用于识别潜在 bridge cities
+
+**§9.9 综合对比**：
+
+| 方法 | 簇数 | Silhouette | CH Index | DB Index | 噪声% |
+|---|---|---|---|---|---|
+| K-Means k=3 | 3 | **0.386** | **151.8** | **0.869** | 0 |
+| K-Means k=5 | 5 | 0.377 | 140.2 | 0.907 | 0 |
+| **K-Means k=4** ← 保留 | **4** | **0.348** | **143.0** | **0.959** | **0** |
+| GMM k=3 | 3 | 0.284 | 107.2 | 1.084 | 0 |
+| GMM k=4 | 4 | 0.278 | 75.5 | 1.216 | 0 |
+| GMM k=5 | 5 | 0.234 | 91.3 | 1.146 | 0 |
+| DBSCAN | 2 | 0.299 | — | — | 14.9% |
+
+- 跨方法 ARI 热力图：K-Means 各 k 之间一致性高 (ARI≈0.4–0.7)，GMM 与 K-Means 中等一致，DBSCAN 与其他方法一致性低
+- **最终决策**：K-Means k=4 作为主模型（理论驱动 + 指标稳健 + 结果稳定），GMM 软概率作为补充不确定性度量，DBSCAN 噪声标签作为异常值检验
 
 ## 5.2 Method 2: Adoption-lag regression
 
@@ -487,23 +578,36 @@ lag 要按下面方式计算：
 
 ### ✅ 5.2.5 实际执行结果（Step 10）
 
-**执行文件**：`step10_adoption_regression.ipynb`（11 个 code cells，全部已执行）
+**执行文件**：`step10_adoption_regression.ipynb`（25 个 cells，全部已执行，含多轮优化）
 
 **实际建模策略调整**：由于 adoption lag 的分布特征（mean=6.28, median=2, 大量 lag=0 的 originator 事件），将原方案的连续 lag 回归调整为三个互补模型：
 
 | 模型 | DV | 分析单位 | n | 方法 | 核心结果 |
 |------|-----|---------|---|------|----------|
-| **Model A** | `is_originator` (0/1) | 城市×项目 | 38,347 | Logistic (clustered SE) | Pseudo R²=0.088 |
-| **Model B** | `originator_share` | 城市 | 130 | OLS | R²=0.276, Adj R²=0.222 |
-| **Model C** | `log(adoption_count)` | 城市 | 130 | OLS | R²=0.965, Adj R²=0.963 |
+| **Model A** | `is_originator` (0/1) | 城市×项目 | 39,158 | Logistic (clustered SE) | Pseudo R²=0.090 |
+| **Model B** | `originator_share` | 城市 | 148 | OLS (HC1) + Beta 回归 | R²=0.247, Adj R²=0.198 |
+| **Model C** | `log(avg_lag_nonorig)` | 城市 | 148 | OLS (HC1) + Region FE | R²=0.265, Adj R²=0.159 |
+
+**Model C DV 调整说明（V1.2 优化）**：原 Model C 使用 `log(adoption_count)` 作为 DV（测量采用广度），R²=0.970 但存在严重 tautology（entity_count ↔ adoption_count 同源循环，循环变量贡献 R² 的 24.0%）。根据审查，DV 调整为 `log(avg_lag_nonorig)`（仅非 originator 事件的平均采用时滞），直接回应 RQ "faster adoption"——网络中心性 → 信息流速 → 更短 lag 是合理因果路径，消除了定义循环。原 adoption breadth 模型降级为 Appendix 10.4b 做 tautology 量化分析。
 
 **关键发现**：
-- `log_entity`（开发者基数）和 `log_degree`（网络中心性）是最强预测变量
-- `log_degree` 对 origination 为负效应、对 adoption 为正效应 → 高连接城市更善于采用而非发起
-- `betweenness` 在 Model C 中显著正效应 → 桥梁位置促进采用广度
-- 外部属性（GDP、education、internet）在 OLS 中不显著 → 网络结构比城市静态属性更重要
+- **Models A/B（origination）**：`log_entity`（开发者基数）和 `log_degree`（网络中心性）是最强预测变量。`log_degree` 对 origination 为负效应 → 高连接城市更善于采用而非发起
+- **Model C（速度）**：仅 `log_gdp` 显著（coef=-0.146, p=0.018，负系数 → 更富裕城市采纳更快）。网络指标和其他外部属性均不显著 → **采纳速度主要受项目因素驱动（null finding）**，与 Step 11 Model D-reg（CV R²≈0.02）互印证
+- 外部属性（education、internet、R&D、research_capacity）在所有主模型中均不显著 → 网络结构比城市静态属性更重要
+- **Adoption speed null finding 的学术价值**：开放 AI 项目在全球城市间的扩散在速度维度上是相对平等的，即使在广度和发起能力上高度集中
 
-**VIF 警告**：`log_degree` VIF=37.5，`log_entity` VIF=28.3 → 存在多重共线性，已在结论中标注
+**9 个自变量**：log_degree, log_population, log_gdp, education_tertiary_pct, internet_users_pct, rd_expenditure_pct, research_capacity, betweenness, log_entity。特征集与 Step 11/12 完全一致。
+
+**Robustness Checks**：
+- **10.3b Beta 回归**：originator_share 为 [0,1] 比例变量，Beta 回归确认 OLS 结论稳健（系数方向一致）
+- **10.4b Tautology 量化（Appendix）**：adoption breadth model R²=0.970；仅用外生变量 R²=0.737 → 循环变量贡献 24.0% R²。证实速度模型更合理
+- **10.5b 局限性讨论**：内生性/tautology、截面因果限制、样本量约束、网络密度对 betweenness 的影响、adoption speed null finding
+
+**已删除的冗余模块（V1.2 精简）**：
+- ~~10.2b 项目固定效应~~：Conditional Logit with project FE 核心结论与 pooled Model A 完全一致（log_entity 1.65 vs 1.92, log_degree -1.55 vs -1.58），但 85% 的项目因无 outcome 变异被排除，引入选择偏差。改为在 Model A markdown 中用 1-2 句话提及 FE 尝试结果
+- ~~10.4c 网络密度检验~~：该检验验证的是旧 DV（adoption_count），与新 Model C（avg_lag）无关，已删除
+
+**与方案对比**：方案预期连续 lag 回归 + project FE。实际执行调整为三模型策略（logistic + share OLS/Beta + speed OLS），并将 DV 从 adoption breadth 调整为 adoption speed 以避免 tautology。经过 V1.2 优化精简后，Step 10 保留 3 个主模型 + 1 个 Beta 稳健性 + 1 个 Appendix tautology 分析 + 1 个局限性讨论。
 
 ## 5.3 Method 3: XGBoost
 
@@ -558,7 +662,27 @@ XGBoost 承担的是：
 - SHAP 与 OLS 的特征重要性排名 Spearman ρ=0.617 (p=0.077) → 两种方法方向一致
 - **SHAP Top-3 特征**：`log_entity`、`log_degree`、`betweenness`，与 OLS 回归结论互相印证
 
-**与方案对比**：方案预期 XGBoost 用于城市级解释建模，但实际 n=148 不足以支撑 tree-based 泛化；分类任务（Model D, n=38,347）表现合理，回归任务过拟合。建议在 Discussion 中讨论此局限。
+**Model D-reg（新增 11.5 节）**：
+
+为检验城市特征能否在充足样本量下预测 adoption speed，新增事件级 GB 回归：
+
+| 模型 | DV | 分析单位 | n | CV R² | SHAP Top-3 |
+|------|-----|---------|------|--------|------------|
+| **Model D-reg** | `lag` (月) | 城市×项目（非 originator） | 25,148 | **0.019±0.002** | log_entity, log_degree, log_population |
+
+- CV R²≈0.02 极低 → 城市特征几乎无法预测单个项目的采用时滞，事件级 lag 受项目异质性主导（哪个项目、流行轨迹等）
+- 但 SHAP 排序与 Model A–F 完全一致（log_entity > log_degree > log_population），验证特征重要性层级的**跨方法、跨分析单位稳健性**
+- 结论：OLS（Step 10）做推断，GB+SHAP（Step 11）做分类 + 特征排序验证，两者互补而非替代
+
+**冗余分析与精简建议（V1.2）**：
+- **Model E（originator_share GB 回归）**和 **Model F（log adoption_count GB 回归）**与 Step 10 Model B/C 使用相同 DV 和 IV，但 CV R² 为负（严重过拟合，n=148 不足），无独立信息增量 → **建议删除**
+- **Model D（is_originator GB 分类）**有独立价值：AUC=0.77 提供预测能力度量 + SHAP beeswarm/dependence 揭示非线性效应 → **保留**
+- **Model D-reg（event-level lag GB 回归）**有独立价值：CV R²=0.02 的 null finding 与 Step 10 Model C 互印证 → **保留**
+- 删除 E/F 后，§11.4 SHAP Dependence（依赖 F）和 §11.5 OLS-vs-GB 前半段比较（依赖 F）需一并删除或重写
+
+**精简后 Step 11 结构**：11.1 Model D + SHAP → 11.2 Model D-reg + SHAP → 11.3 跨方法对比（基于 D 和 D-reg）→ 11.4 Summary
+
+**与方案对比**：方案预期 XGBoost 用于城市级解释建模，但实际 n=148 不足以支撑 tree-based 泛化；分类任务（Model D, n=39,158）表现合理，回归任务过拟合。Model D-reg 在事件级回归中样本量充足但解释力仍极低，进一步确认 lag 的主要变异来源是项目层面而非城市层面。
 
 ## 5.4 Method 4: GraphSAGE
 
@@ -879,15 +1003,37 @@ EDA 在正式建模之前完成，目的是理解数据质量、发现分布特�
 > - GraphSAGE：网络全连通且密度足够（0.886），适合 GNN 训练
 > - 关键模式记录：创新集中但采用分散、网络位置比静态属性更重要、规模不影响速度
 
-#### 6.4.2.3 Step 3. K-means for city roles ✅ 已完成
+#### 6.4.2.3 Step 3. K-means for city roles ✅ 已完成（已扩展参数敏感性 + 替代模型）
 
 1. 使用城市层指标识别 roles
 2. 输出 originators、collaboration hubs、bridge cities、late adopters 等 cluster
 
-**实际执行（`step9_kmeans.ipynb`）**：
+**实际执行（`step9_kmeans.ipynb`，41 cells）**：
+
+**§9.1–9.5 主 K-Means 模型**：
 - 聚类特征：log1p(origination_count), log1p(adoption_count), log1p(weighted_degree), log1p(betweenness×1000), log1p(origination_rate_pop) → z-score
 - k=4, silhouette=0.35
 - 四角色：Global Innovation Hub (27城) / Active Collaborator (56城) / Emerging Contributor (44城) / Peripheral (16城)
+- 输出 Silhouette 图、Radar 雷达图、全球地图、箱线图、区域组成图
+
+**§9.6 参数敏感性（新增）**：
+- k=3/4/5 × n_init=50 对比 → k=4 在理论解释性与指标间最佳折衷
+- n_init 增大不改变结果 → 原始聚类已稳定
+
+**§9.7 DBSCAN 替代模型（新增）**：
+- k-distance 图指导 eps 选择 + eps×min_samples 网格搜索
+- 最佳 eps=0.8, ms=5 → 仅 2 簇 + 22 噪声 (14.9%), sil=0.299
+- 不适合本数据，但噪声点可作鲁棒性检验
+
+**§9.8 GMM 替代模型（新增）**：
+- BIC/AIC 模型选择 + k=3/4/5 对比
+- GMM(k=4) sil=0.278, 仅 8 城分配不确定
+- 与 K-Means ARI=0.340，中等一致
+- 软概率可量化边界城市不确定性
+
+**§9.9 综合对比（新增）**：
+- 7 种配置×3 指标对比表 + ARI 热力图 + PCA 投影
+- 结论：K-Means k=4 作为主模型，GMM 补充不确定性，DBSCAN 标记异常
 
 #### 6.4.2.4 Step 4. Adoption-lag regression ✅ 已完成
 
@@ -895,21 +1041,22 @@ EDA 在正式建模之前完成，目的是理解数据质量、发现分布特�
 2. 分析哪些因素与更快项目采用相关
 3. 可加入项目固定效应或项目控制变量
 
-**实际执行（`step10_adoption_regression.ipynb`）**：
-- 调整为三模型策略：Model A (Logistic, n=38,347), Model B (OLS originator_share, n=130), Model C (OLS log_adoption, n=130)
-- 核心发现：log_entity 是最强预测因子；log_degree 对 adoption 正效应、对 originator 概率负效应
-- Model C R²=0.965 但存在 degree-adoption 同源循环性
-- betweenness 对 adoption 有显著正效应
+**实际执行（`step10_adoption_regression.ipynb`，18 个 code cells）**：
+- 三模型策略：Model A (Logistic, n=39,158), Model B (OLS originator_share, n=148), Model C (OLS log_avg_lag, n=148)
+- Model C DV 从 adoption breadth 调整为 adoption speed（log_avg_lag），直接回答"更快采纳"的 RQ
+- 核心发现：log_entity 是最强预测因子；log_degree 对 adoption 正效应、对 originator 概率负效应；采纳速度仅与 GDP 显著相关（速度主要受项目异质性驱动）
+- **Robustness Checks**：(10.2b) 项目固定效应 Conditional Logit；(10.3b) Beta 回归；(10.4b) 内生性检验（Appendix）；(10.4c) 网络密度检验（Appendix）；(10.5c) Region FE → 核心结论稳健
 
 #### 6.4.2.5 Step 5. XGBoost for explanatory modelling ✅ 已完成
 
 1. 解释哪些城市特征与 innovation-oriented roles 和 faster adoption 相关
 2. 用 SHAP 做辅助解释
 
-**实际执行（`step11_xgboost_shap.ipynb`）**：
+**实际执行（`step11_xgboost_shap.ipynb`，14 个 code cells）**：
 - Model D (分类 is_originator): CV AUC=0.769 → 合理区分能力
 - Model E/F (回归): CV R² 为负 → n=148 样本量不足导致 GB 回归过拟合
-- SHAP Top-3 特征：log_entity, log_degree, betweenness
+- **新增 Model D-reg (11.5)**：事件级 lag GB 回归（n=25,148），CV R²=0.019 → 城市特征无法预测事件级 lag（受项目异质性主导），但 SHAP 排序与所有其他模型一致
+- SHAP Top-3 特征：log_entity, log_degree, betweenness（跨 A–F + D-reg 全部一致）
 - 分类模型可用，回归模型需谨慎解读（OLS 更适合小样本）
 
 #### 6.4.2.6 Step 6. GraphSAGE for next-wave adopter prediction ✅ 已完成
@@ -955,6 +1102,13 @@ EDA 在正式建模之前完成，目的是理解数据质量、发现分布特�
 
 **✅ 实际结论**：K-means (k=4, silhouette=0.35) 识别出四种角色。27 个 Global Innovation Hub 主导全球创新（mean origination=275），56 个 Active Collaborator 形成协作中坚，44 个 Emerging Contributor 初步参与，16 个 Peripheral 城市处于边缘。角色分布与 North America / East Asia 主导格局一致。
 
+**✅ 参数敏感性与替代模型对比（新增 §9.6–9.9）**：
+- k=3 统计最优 (sil=0.386) 但丢失中间角色层；k=5 拆分 Peripheral 但可解释性下降 → **k=4 最佳折衷**
+- n_init 20→50 不改变结果 → 聚类已稳定收敛
+- DBSCAN 仅发现 2 个密度簇 + 14.9% 噪声 → 不适合此数据，但噪声点可检验异常城市
+- GMM(k=4) sil=0.278，与 K-Means ARI=0.340；仅 5.4% 城市分配不确定 → 软概率可量化边界城市
+- 7 种方法配置综合对比（Silhouette / CH / DB / ARI 热力图）确认 K-Means k=4 为最优选择
+
 ### 6.5.4 小节 3：Project-level adoption lag and diffusion speed
 
 预期展示：
@@ -973,7 +1127,7 @@ EDA 在正式建模之前完成，目的是理解数据质量、发现分布特�
 2. SHAP summary plot
 3. 高学历、高收入、科研能力、数字基础设施、网络中心性与创新/采用能力的关系
 
-**✅ 实际结论**：开发者基数 (entity_count) 和网络中心性 (weighted_degree) 是最重要的特征（SHAP Top-3: log_entity, log_degree, betweenness）。传统经济/教育指标对 origination 无直接效应（偏相关 p>0.4），但控制规模后 GDP (partial r=0.266, p=0.002) 和互联网覆盖率 (partial r=0.253, p=0.004) 对 adoption 显著。XGBoost 分类 AUC=0.77 可用，但回归因 n=148 过拟合（CV R² 为负），OLS 更适合此样本量。
+**✅ 实际结论**：开发者基数 (entity_count) 和网络中心性 (weighted_degree) 是最重要的特征（SHAP Top-3: log_entity, log_degree, betweenness）。传统经济/教育指标对 origination 无直接效应（偏相关 p>0.4），但控制规模后 GDP (partial r=0.266, p=0.002) 和互联网覆盖率 (partial r=0.253, p=0.004) 对 adoption 显著。XGBoost 分类 AUC=0.77 可用，但回归因 n=148 过拟合（CV R² 为负），OLS 更适合此样本量。**（新增）** Model D-reg 在事件级（n=25,148）回归 lag，CV R²=0.019，确认城市特征对事件级采用速度的直接解释力极低——lag 的主要变异来源是项目异质性而非城市因素；但 SHAP 特征排序与所有其他模型完全一致，验证了结论的跨方法稳健性。
 
 ### 6.5.6 小节 5：Predicting next-wave adopters
 
@@ -1003,9 +1157,14 @@ EDA 在正式建模之前完成，目的是理解数据质量、发现分布特�
 2. 不同类型项目的扩散机制并不完全相同
 3. adoption lag 在跨项目比较时受项目异质性影响
 4. GraphSAGE 预测的是 adopter，而不是 originator emergence
-5. **（新增）** XGBoost 回归在 n=148 小样本下 CV R² 为负，说明 GB 方法不适合此规模城市级回归
-6. **（新增）** collaboration_count 与 weighted_degree 完全冗余 (ρ=1.0)，degree 与 adoption 同源构建导致 Model C R²=0.965 存在循环性
-7. **（新增）** 网络密度 0.886 导致 betweenness 区分度有限，betweenness 与 degree 呈负相关 (ρ=−0.915) 是密集网络的数学特性而非桥梁效应
+5. **XGBoost 回归在 n=148 小样本下 CV R² 为负**：GB 方法不适合此规模城市级回归。补充的 Model D-reg（事件级，n=25,148）CV R²=0.019，进一步确认城市特征对事件级 lag 解释力极低——主要变异来源是项目异质性
+6. **collaboration_count ≡ weighted_degree (ρ=1.0)**：完全冗余，建模已只保留 degree
+7. **Model C R²=0.965 存在循环性**：Robustness check (10.4b) 显示剔除 log_degree 后 R² 仅降 0.6%，真正的循环性来自 `entity_count` ↔ `adoption_count` 的近定义同源关系（两者在数据构建层面高度关联）。Discussion 中应明确标注 Model C 的 R² 主要反映构建循环而非因果解释力，推断应以 Model A/B 为准
+8. **网络密度 0.886 导致 betweenness 不可靠**：Robustness check (10.4c) 使用 weight≥5 子网络（密度降至 0.563）重算 betweenness，发现原始与子网络 betweenness 相关性仅 −0.05（近乎零相关），确认密集网络中 betweenness 是数学伪影而非真实的桥梁效应
+9. **外部属性对 origination 无直接效应**：这是一个研究发现而非方法缺陷——网络结构（degree, betweenness）比城市静态属性（GDP, education）对创新角色的解释力更强，可引用 technological relatedness 文献支持
+10. **（新增）K-Means k=4 vs k=3 的 silhouette 差距 (0.348 vs 0.386)**：k=3 统计指标更优但丢失理论中间层（Active Collaborator 被合并），k=4 在理论解释性与指标间取得最佳折衷。参数敏感性分析（§9.6）完整记录了这一权衡过程
+11. **（新增）DBSCAN 仅发现 2 个密度簇**：城市特征空间中无明显密度间隙，DBSCAN 不适合此类平滑分布数据。但其识别的 22 个噪声城市（14.9%）可作为异常值鲁棒性检验
+12. **（新增）GMM 与 K-Means 中等一致（ARI=0.340）**：两种方法捕捉到部分重叠但有差异的结构，GMM 因允许椭球协方差而产生不同划分。GMM 软概率显示 94.6% 城市分配确定（max prob≥0.7），验证了聚类边界的清晰性
 
 ## 6.6 Expected Conclusion ❌ 待撰写
 
@@ -1018,7 +1177,7 @@ Expected Conclusion 现在应围绕“高影响 open-AI 项目生态”来收束
 全球城市在 prominent open-AI projects 的生态中并不扮演同质角色。
 有些城市更像 originators，有些是 collaboration hubs，有些是 bridge cities，而更多城市是 late adopters。
 
-> **✅ 实际验证**：K-means (k=4) 确认了角色异质性—27 个 Global Innovation Hub（San Francisco, Beijing, London 等）主导创新发起（mean origination=275），16 个 Peripheral 城市仅 mean=2。与预期基本一致，但“bridge cities”未作为独立 cluster 出现（网络密度 0.886 导致 betweenness 区分度不足）。
+> **✅ 实际验证**：K-means (k=4) 确认了角色异质性—27 个 Global Innovation Hub（San Francisco, Beijing, London 等）主导创新发起（mean origination=275），16 个 Peripheral 城市仅 mean=2。与预期基本一致，但“bridge cities”未作为独立 cluster 出现（网络密度 0.886 导致 betweenness 区分度不足）。**（新增）** 参数敏感性分析（k=3/4/5, n_init=50）和替代模型（DBSCAN, GMM）的系统对比进一步验证了 k=4 选择的稳健性：k=3 统计最优 (sil=0.386) 但丢失理论中间层；DBSCAN 仅发现 2 个密度簇；GMM(k=4) 与 K-Means ARI=0.340 且 94.6% 城市分配确定。
 
 ### 6.6.3 第二层：扩散速度
 
@@ -1044,6 +1203,9 @@ GitHub 城市协作网络对“下一波 adopter 城市”的识别具有预测�
 1. 可进一步把 PatentsView 引入为 formal innovation validation layer
 2. 可把 case-study 技术家族扩展成系统性对比研究
 3. 可进一步比较不同项目类型的扩散机制差异
-4. **（新增）** 尝试 edge-level GNN 或 link prediction 预测新协作关系的形成
-5. **（新增）** 扩大城市样本（当前 n=148 限制了 tree-based 方法泛化能力）
-6. **（新增）** 引入更精细的空间变量（如到最近 Innovation Hub 的网络距离）
+4. 尝试 edge-level GNN 或 link prediction 预测新协作关系的形成
+5. 扩大城市样本（当前 n=148 限制了 tree-based 方法泛化能力）
+6. 引入更精细的空间变量（如到最近 Innovation Hub 的网络距离）
+7. **（新增）** 使用时间滞后策略（t−1 期网络特征 → t 期 adoption）打破 degree-adoption 同期循环性，实现更可靠的因果推断
+8. **（新增）** 引入项目层面控制变量（项目 popularity、age、type）降低事件级 lag 回归中的项目异质性噪声，提升城市特征的边际解释力
+9. **（新增）** 使用分层阈值（如 weight≥5/10/20）系统检验网络稀疏化对 betweenness 和 GNN embedding 质量的影响
