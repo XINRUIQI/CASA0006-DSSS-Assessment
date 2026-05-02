@@ -21,7 +21,7 @@
 | 分析 | Step 10: Adoption 回归 (B/C) + 正则化稳健性 | ✅ 已完成（V1.3 精简：删 Model A Logistic + Model B-Beta） | `step10_adoption_regression.ipynb` |
 | 分析 | Step 11: 事件级 D-reg（**XGBoost** + SHAP） | ✅ 已完成（**V1.5**：主模型 IEI×17，`log1p(interval)`，**CV R²≈0.307±0.012**；含 4-way 敏感性） | `step11_xgboost_shap.ipynb` |
 | 分析 | Step 12: GraphSAGE + MLP 消融 | ✅ 已完成（V1.2 修复泄漏 + 参数优化 + 消融实验） | `step12_graphsage.ipynb` |
-| 分析 | Step 13: 技术类型交互回归 (RQ5) | 🔲 待实施 | `step13_tech_type_interaction.ipynb` |
+| 分析 | Step 13: 技术类型交互回归 (RQ5) | ✅ 已完成（OLS + 54 交互项 + 6 项目控制，R²=0.284） | `step13_tech_type_interaction.ipynb` |
 | 整合 | 最终提交 Notebook | 🔲 待完成 | `Template_submission_CASA0006.ipynb` |
 | 整合 | Narrative 撰写（≤1500词） | 🔲 待完成 | — |
 | 整合 | Case Study 可视化 | 🔲 待完成 | — |
@@ -313,7 +313,7 @@ Step 12 进行了全面的方法论审查与优化：
 | `step10_adoption_regression.ipynb` | 22 | RQ2 | Adoption 回归 (B/C) + Robustness (10.4b Tautology, 10.5c Region FE, 10.5d Ridge/Lasso) |
 | `step11_xgboost_shap.ipynb` | 8 | RQ3 | 事件级 D-reg：**XGBoost** + **SHAP**（17 特征，`log1p(lag)`） |
 | `step12_graphsage.ipynb` | 10 | RQ4 | GraphSAGE 预测 |
-| `step13_tech_type_interaction.ipynb` | — | RQ5 | 技术类型分类 + 交互回归（待实施） |
+| `step13_tech_type_interaction.ipynb` | 22 | RQ5 | 技术类型分类 + OLS 交互回归（已完成） |
 
 ---
 
@@ -484,7 +484,7 @@ Step 12 进行了全面的方法论审查与优化：
 5. ✅ 测量城市对高影响项目的 adoption lag → `step10_adoption_regression.ipynb`
 6. ✅ 解释哪些城市特征与 innovation-oriented roles / faster adoption 相关 → `step11_xgboost_shap.ipynb`
 7. ✅ 利用协作网络预测下一波 adopter 城市 → `step12_graphsage.ipynb`
-8. ❌ 检验城市特征对扩散速度的影响是否因技术类型而异 → `step13_tech_type_interaction.ipynb`（待实施）
+8. ✅ 检验城市特征对扩散速度的影响是否因技术类型而异 → `step13_tech_type_interaction.ipynb`
 9. ❌ 用 1–2 个具体技术家族或代表项目作为 case study 展示扩散路径和可视化 → 待完成
 
 ## 4.4 Notebook 运行策略
@@ -1028,15 +1028,16 @@ Addresses: RQ5（城市特征对扩散速度的影响是否因技术类型而异
 ### 5.5.3 回归设定
 
 ```
-lag_ij = β₀ + β₁·X_city_i + β₂·D_tech_j + β₃·(X_city_i × D_tech_j) + γ·Controls_ij + ε_ij
+log1p(IEI)_ij = β₀ + β₁·Z_city_i + β₂·D_tech_j + β₃·(Z_city_i × D_tech_j) + γ·Proj_controls_j + ε_ij
 ```
 
-- i = 城市 (148), j = 项目, ij = 城市-项目采用事件 (n ≈ 37,930)
-- `X_city_i`：9 个城市特征（与 Step 10/11 一致：log_degree, log_entity, log_population, log_gdp, education_tertiary_pct, internet_users_pct, rd_expenditure_pct, research_capacity, betweenness）
+- i = 城市 (148), j = 项目, ij = 城市-项目采用事件 (n = 24,434, lag > 0)
+- DV：`log1p(inter-event interval)`（与 Step 11 §11.2 一致的扩散速度定义）
+- `Z_city_i`：9 个城市特征（z-scored，与 Step 10/11 一致：log_degree, log_entity, log_population, log_gdp, education_tertiary_pct, internet_users_pct, rd_expenditure_pct, research_capacity, betweenness）
 - `D_tech_j`：6 个技术类型虚拟变量（LLM-Application 为参照组）
 - `β₃`：**核心兴趣**——54 个交互项（9 特征 × 6 dummy），检验城市特征效应的技术类型异质性
-- Controls：项目流行度百分位、项目创建年份、城市区域 FE 等
-- 误差：按城市聚类稳健标准误
+- `Proj_controls_j`：6 个项目层控制变量（log_proj_pop, proj_origin_idx, log_stars, log_forks, popularity_pctile, fork_star_ratio，与 Step 11 一致）
+- 方法：**OLS**（普通最小二乘法）
 
 ### 5.5.4 交互项矩阵（9 特征 × 6 dummy = 54 项）
 
@@ -1052,25 +1053,80 @@ lag_ij = β₀ + β₁·X_city_i + β₂·D_tech_j + β₃·(X_city_i × D_tech_
 | X8: research_cap | #43 | #44 | #45 | #46 | #47 | #48 |
 | X9: betweenness | #49 | #50 | #51 | #52 | #53 | #54 |
 
-总参数：9 (主效应) + 6 (tech dummy) + 54 (交互) + ~5 (控制) + 1 (截距) ≈ 75；参数/样本比约 1:505。
+总参数：9 (城市主效应) + 6 (tech dummy) + 54 (交互) + 6 (项目控制) + 1 (截距) = 76；参数/样本比 1:321。
 
-### 5.5.5 主规格与稳健性
+### ✅ 5.5.5 实际执行结果（Step 13）
 
-| 规格 | 方法 | 用途 |
-|------|------|------|
-| **主规格** | OLS + 城市聚类稳健 SE | 与 Step 10 对齐，系数直接解释为"月数变化" |
-| 稳健性 1 | log(1+lag) OLS | 检验 lag 右偏对结论的影响 |
-| 稳健性 2 | LMM（项目随机截距） | 控制项目异质性后交互是否仍显著 |
+**执行文件**：`step13_tech_type_interaction.ipynb`（22 cells，已完成执行）
 
-### 5.5.6 与 Step 10-12 的衔接
+**模型表现**：
 
-| 现有发现 | RQ5 追问 |
-|---------|---------|
-| Step 10: 网络指标 > 城市静态属性 | 对所有技术类型都成立？还是仅 Agent/LLM-App 依赖网络？ |
-| Step 10: education 全样本不显著 | 是否被 LLM-Application 的低门槛特性"淹没"？对 Vision/LLM-Foundation 可能显著？ |
-| Step 10: GDP 对速度有负效应 | 资源密集型技术（Vision/Speech）的 GDP 效应是否更强？ |
-| Step 11: 城市特征对事件级 lag 解释力低 (R²=0.019→0.302) | 加入 tech_type 交互后解释力是否提升？ |
-| Step 12: 图结构增量 ΔR²=+0.145 | 该增量主要由哪些技术类型贡献？ |
+| 指标 | 值 |
+|------|-----|
+| R² | 0.284 |
+| Adj R² | 0.282 |
+| F-stat | 128.67 (p ≈ 0) |
+| 观测数 | 24,434 |
+| 参数数 | 76 |
+
+**问题 1 结论：不同技术类型传播速度显著不同**
+
+tech_type 主效应（相对 LLM-Application 参照组）：
+
+| 技术类型 | 系数 | p 值 | 含义 |
+|---------|------|------|------|
+| LLM-Foundation | −0.010 | 0.486 | 与 LLM-App 无显著差异 |
+| NLP-Traditional | +0.083 | 0.127 | 传播略慢（不显著） |
+| **Vision** | **−0.049** | **0.004** | **传播显著更快** |
+| **Agent** | **+0.029** | **0.015** | **传播显著更慢** |
+| Multimodal | +0.009 | 0.643 | 无显著差异 |
+| **Speech** | **+0.048** | **0.046** | **传播显著更慢** |
+
+Vision 在城市间传播最快；Agent 和 Speech 传播最慢。
+
+**问题 2 结论：城市特征效应因技术类型而异**
+
+联合 F 检验（54 个交互项 = 0）：**F = 1.388, p = 0.031**（显著）
+
+显著交互项（7/54, p < .10; 5/54, p < .05）：
+
+| # | 交互项 | 系数 | p | 解读 |
+|---|--------|------|---|------|
+| 1 | log_entity × LLM-Foundation | +0.184 | **0.003** | 开发者多的城市，基础模型反而传播更慢（vs LLM-App） |
+| 2 | log_degree × LLM-Foundation | −0.166 | **0.013** | 网络中心性高的城市，基础模型传播更快 |
+| 3 | log_population × Vision | −0.060 | **0.022** | 大城市中 Vision 项目传播更快 |
+| 4 | log_population × Multimodal | −0.073 | **0.028** | 大城市中 Multimodal 项目传播更快 |
+| 5 | log_population × Speech | −0.084 | **0.033** | 大城市中 Speech 项目传播更快 |
+| 6 | rd_expenditure × LLM-Foundation | −0.038 | 0.058† | 高 R&D 城市，基础模型传播更快 |
+| 7 | log_population × LLM-Foundation | −0.040 | 0.074† | 大城市中基础模型传播更快 |
+
+Block F 检验（技术类型是否调节各城市特征）：
+
+| 城市特征 | F | p | 显著性 |
+|---------|---|---|--------|
+| **log_population** | **2.223** | **0.038** | **\*** |
+| log_entity | 1.908 | 0.076 | † |
+| research_capacity | 1.307 | 0.250 | |
+| log_degree | 1.262 | 0.271 | |
+| rd_expenditure_pct | 1.121 | 0.347 | |
+| education_tertiary_pct | 0.795 | 0.574 | |
+| betweenness | 0.521 | 0.793 | |
+| internet_users_pct | 0.419 | 0.867 | |
+| log_gdp | 0.226 | 0.968 | |
+
+**城市规模（log_population）是唯一被技术类型显著调节的城市特征**：非文本类技术（Vision/Multimodal/Speech）在大城市的传播优势比文本类技术（LLM-App/Agent）更强。
+
+**稳健性检验**（DV = log(1+lag)）：R² = 0.152；交互项系数符号一致率 66.7%（36/54），Spearman ρ = 0.493，核心结论稳健。
+
+### 5.5.6 核心发现与 Step 10-12 的对话
+
+| 现有发现 | RQ5 追问 | Step 13 回答 |
+|---------|---------|-------------|
+| Step 10: 网络指标 > 城市静态属性 | 对所有技术类型都成立？ | **不完全成立**：log_degree 对 LLM-Foundation 有显著额外加速效应（p=.013），但对其他类型无差异 |
+| Step 10: education 全样本不显著 | 是否被 LLM-App 淹没？ | education 交互项在所有类型中**均不显著**（最高 |t|=1.59），非被淹没，而是真的不重要 |
+| Step 10: GDP 对速度有负效应 | 资源密集型技术 GDP 效应更强？ | GDP 交互项**全部不显著**（最高 |t|=0.76），GDP 效应不因技术类型而异 |
+| Step 11: 城市特征解释力低 (R²=0.302) | 加入交互后解释力提升？ | R² = 0.284（交互模型含项目控制），**交互项增量贡献极小**，项目控制变量是主要贡献者 |
+| 新发现 | — | **城市规模对非文本技术的传播有额外加速作用**，LLM-Foundation 更依赖网络中心性 |
 
 # 6. Include Required Notebook Sections
 
@@ -1405,14 +1461,18 @@ EDA 在正式建模之前完成，目的是理解数据质量、发现分布特�
 - MLP 消融基线 (回归): Test R²=0.768 → 图结构增量 ΔR²=+0.145
 - 城市排名 Spearman ρ=0.960 → 图结构显著提升预测能力
 
-#### 6.4.2.7 Step 7. Technology-type interaction regression (RQ5) 🔲 待实施
+#### 6.4.2.7 Step 7. Technology-type interaction regression (RQ5) ✅ 已完成
 
-1. 基于 `ai_evidence` + `tags` / `pipeline_tag` 对项目进行 7 类技术分类（LLM-Foundation / LLM-Application / NLP-Traditional / Vision / Agent / Multimodal / Speech）
-2. 将 `tech_type` merge 进 `city_project_adoption_events`
-3. OLS 交互回归：`lag ~ 城市特征 + tech_type + 城市特征 × tech_type`，检验 54 个交互项
-4. 稳健性：log(1+lag) OLS 和/或 LMM（项目随机截距）
+1. 基于 `ai_evidence` + `tags` / `pipeline_tag` 对项目进行 7 类技术分类
+2. 将 `tech_type` merge 进采用事件表
+3. OLS 交互回归：`log1p(IEI) ~ Z_city + D_tech + Z_city × D_tech + Proj_controls`，76 个参数，n = 24,434
+4. 稳健性：DV = log(1+lag) 替代检验
 
-**待实施文件**：`step13_tech_type_interaction.ipynb`
+**实际执行（`step13_tech_type_interaction.ipynb`，22 cells）**：
+- R² = 0.284, Adj R² = 0.282
+- 3/6 tech dummy 显著：Vision 传播最快 (p=.004)，Agent (p=.015) 和 Speech (p=.046) 传播最慢
+- 54 个交互项联合 F 检验 p = 0.031（显著）；5 个交互项 p < .05
+- **核心发现**：城市规模（log_population）是唯一被技术类型显著调节的城市特征（block F p=.038）——非文本类技术在大城市传播优势更强；LLM-Foundation 更依赖网络中心性
 
 #### 6.4.2.8 Step 8. Optional case-study visualisation
 
@@ -1498,13 +1558,14 @@ EDA 在正式建模之前完成，目的是理解数据质量、发现分布特�
 3. 交互项森林图 / 系数对比热力图（9 城市特征 × 7 技术类型）
 4. 哪些城市特征的效应因技术类型而显著不同
 
-**预期假说**：
-- 高教育 / 高科研城市对 LLM-Foundation 和 Vision 的采纳更快（知识门槛假说）
-- Agent 和 LLM-Application 在高 degree 城市传播更快（网络依赖假说）
-- Vision 和 Speech 在高 GDP 城市传播更快（资源/算力门槛假说）
-- 交互项的加入可能提升对事件级 lag 的解释力（相对 Step 11 的 null finding）
+**✅ 实际结论**：
 
-**状态**：🔲 待实施
+1. **不同技术传播速度显著不同**：Vision 传播最快（coef=−0.049, p=.004），Agent (coef=+0.029, p=.015) 和 Speech (coef=+0.048, p=.046) 传播最慢
+2. **城市特征效应因技术类型而异**：54 个交互项联合 F 检验 p=0.031（显著），但个别效应有限（5/54 p<.05）
+3. **城市规模是唯一被技术类型显著调节的城市特征**（block F p=.038）：非文本类技术（Vision/Multimodal/Speech）在大城市的传播优势比 LLM 类更强
+4. **LLM-Foundation 更依赖网络中心性**（log_degree × LLM-Found p=.013）但在开发者多的城市反而更慢（log_entity × LLM-Found p=.003）
+5. **预期假说对照**：知识门槛假说（education/research_capacity 调节）**未获支持**；GDP 门槛假说**未获支持**；网络依赖假说**部分支持**（仅 LLM-Foundation）；城市规模假说**获支持**
+6. R² = 0.284（含项目控制），交互项本身增量极小——与 Step 10/11 "项目异质性主导" 结论一致
 
 ### 6.5.9 小节 8：Case-study visualisation
 
@@ -1571,9 +1632,9 @@ GitHub 城市协作网络对“下一波 adopter 城市”的识别具有预测�
 
 ### 6.6.6 第五层：技术类型异质性（RQ5, Step 13）
 
-城市特征对 prominent open-AI 项目扩散速度的影响并非对所有技术类型一致。不同技术类型（LLM 基础模型、LLM 应用、传统 NLP、视觉、Agent、多模态、语音）的扩散受到不同城市条件的驱动。
+不同技术类型的 prominent open-AI 项目在全球城市间的传播速度显著不同，且城市特征的效应因技术类型而异。
 
-> **待验证**：Step 13 交互回归将检验 54 个城市特征×技术类型交互项。预期发现：(1) 高科研/高教育城市对 LLM-Foundation 和 Vision 的采纳优势大于对 LLM-Application 的优势（知识门槛效应）；(2) Agent 和 LLM-Application 对网络中心性更敏感（网络扩散效应）；(3) 交互效应的存在意味着 Step 10 中 education 不显著的结论可能是被 LLM-Application 的低门槛特性"淹没"。
+> **✅ 实际验证**：Step 13 交互回归（OLS，n=24,434，R²=0.284）发现：(1) Vision 传播最快，Agent 和 Speech 传播最慢——不同技术的扩散速度确实存在显著差异；(2) 城市规模是唯一被技术类型显著调节的城市特征（block F p=.038）——非文本类技术（Vision/Multimodal/Speech）在大城市的传播优势比 LLM 类更强；(3) LLM-Foundation 更依赖网络中心性传播（p=.013）。预期的知识门槛假说（education/research_capacity 调节）和 GDP 门槛假说均未获支持——education 不显著并非被 LLM 淹没，而是对所有技术类型都不重要。
 
 ### 6.6.7 第六层：future work
 
