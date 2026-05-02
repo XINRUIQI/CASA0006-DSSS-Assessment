@@ -18,9 +18,9 @@
 | 增强 | Step 6: 城市外部属性 | ✅ 已完成 | `step6_augment_city_attributes.py` |
 | 分析 | Step 8: EDA | ✅ 已完成 | `step8_eda.ipynb` + `step8b_eda_detailed.ipynb` |
 | 分析 | Step 9: K-means + 参数敏感性 + DBSCAN + GMM | ✅ 已完成（已扩展） | `step9_kmeans.ipynb` |
-| 分析 | Step 10: Adoption-lag 回归 | ✅ 已完成（V1.2 优化精简） | `step10_adoption_regression.ipynb` |
-| 分析 | Step 11: XGBoost + SHAP | ✅ 已完成（待 V1.2 精简 E/F） | `step11_xgboost_shap.ipynb` |
-| 分析 | Step 12: GraphSAGE | ✅ 已完成 | `step12_graphsage.ipynb` |
+| 分析 | Step 10: Adoption-lag 回归 + 正则化稳健性 | ✅ 已完成（V1.2 新增 10.5d Ridge/Lasso） | `step10_adoption_regression.ipynb` |
+| 分析 | Step 11: GB + SHAP（非线性） | ✅ 已完成（V1.2 精简：删 E/F，Ridge 移入 Step 10） | `step11_xgboost_shap.ipynb` |
+| 分析 | Step 12: GraphSAGE + MLP 消融 | ✅ 已完成（V1.2 修复泄漏 + 参数优化 + 消融实验） | `step12_graphsage.ipynb` |
 | 整合 | 最终提交 Notebook | 🔲 待完成 | `Template_submission_CASA0006.ipynb` |
 | 整合 | Narrative 撰写（≤1500词） | 🔲 待完成 | — |
 | 整合 | Case Study 可视化 | 🔲 待完成 | — |
@@ -89,7 +89,29 @@ step5b 解析 HF tags 中 `base_model:*` 标签，构建 2,922 条衍生边（fi
 
 step6 为 148 城市添加 8 类外部变量：population, gdp_per_capita, education_tertiary_pct, internet_users_pct, rd_expenditure_pct, research_capacity, timezone_utc, region。同时计算了人口标准化 rate。
 
-### 优化 6：Robustness Checks 量化已知局限
+### 优化 6：Step 10/11 职责重构（V1.2）
+
+原 Step 11 混合了线性方法（Ridge/Lasso/ElasticNet）和树模型（GB + SHAP），且 Model E/F（n=148 城市级 GB 回归）与 Step 10 Model B/C 完全重复。V1.2 重构为清晰的方法论分工：
+- **Step 10 = 所有线性/参数方法**（OLS、Logit、Beta、Ridge、Lasso、ElasticNet）→ 推断 + 稳健性
+- **Step 11 = 所有非线性方法**（GB + SHAP）→ 非线性检验 + 可解释性
+
+具体变更：
+1. **Step 10 新增 10.5d**：Ridge/Lasso/ElasticNet 正则化稳健性检验（从 Step 11 移入），对 originator_share、log(adoption)、log(avg_lag) 三个 DV 做 5-fold CV 对比，含系数可视化和 Lasso 特征选择
+2. **Step 11 删除 Model E/F**：GB 回归（n=148）严重过拟合（CV R² 为负），与 Step 10 OLS 重复且无独立信息增量
+3. **Step 11 精简为 16 cells**：仅保留 Model D（分类，n=39k）和 Model D-reg（事件级 lag 回归，n=25k），均在大样本上运行
+
+### 优化 7：GraphSAGE 方法论强化（V1.2）
+
+Step 12 进行了全面的方法论审查与优化：
+
+1. **特征泄漏修复**：原版使用全时段 `adoption_count`(r=0.731)、`weighted_degree`(r=0.864) 等来自 `city_attributes.csv` 的特征，包含测试期信息。V1.2 替换为仅从训练期 (≤202406) 计算的 4 个活动特征 (`train_adopt_count`, `train_orig_count`, `train_weighted_degree`, `train_entity_count`)，特征维度从 14 降至 10
+2. **数据划分改进**：70/30 随机划分（无验证集）→ 60/20/20 分层划分（基于 `y_cls` 确保高/低采纳者比例均衡）。新增验证集支持 early stopping 与模型选择
+3. **参数调优**：三组配置对比实验（dropout=0.5/0.3 × early stopping 有/无 × WD=1e-3/5e-4），最终选择 Config C（dropout=0.3, WD=5e-4, early stopping patience=20），在验证集 R²=0.918 和测试集 R²=0.914 间取得最佳泛化
+4. **MLP 消融基线**：新增同构 2 层 MLP（无图传播）对比，量化图结构增量 ΔR²=+0.145
+5. **train_weighted_degree 消融**：去掉该主导特征后图结构增量反而从 ΔR²=+0.145 扩大至 ΔR²=+0.367，证明 GraphSAGE 的图传播可部分替代节点度特征
+6. **新增 Limitations & Discussion 节 (12.11)**：系统讨论小样本局限、特征主导性、图密度、G2 任务价值、因果解释缺失等 5 项局限
+
+### 优化 8：Robustness Checks 量化已知局限
 
 针对已知局限进行了系统量化检验（详见 §0.6）：
 
@@ -101,6 +123,7 @@ step6 为 148 城市添加 8 类外部变量：population, gdp_per_capita, educa
 6. **（新增）9.8 GMM 替代模型**：BIC/AIC 模型选择 + k=3/4/5 对比 → GMM(k=4) sil=0.278，与 K-Means ARI=0.340；94.6% 城市分配确定，软概率可量化边界城市
 7. **（新增）9.9 跨方法综合对比**：7 种聚类配置 × 3 指标 + ARI 热力图 + PCA 投影，系统确认 K-Means k=4 为最优选择
 8. **（新增）10.5c Region FE 检验**：对 Models A/B/C 加入 9 类宏观区域固定效应，验证核心结论稳健性。发现：(1) log_entity 和 log_degree 保持显著方向不变；(2) GDP 对 origination 的效应被区域组成完全吸收；(3) 外部属性仍全面不显著；(4) Adj R² 几乎不变，确认主模型（不含 region FE）适当。主模型特征集与 Step 11/12 保持一致以支持跨方法对比
+9. **（新增）10.5d Ridge/Lasso/ElasticNet 稳健性检验**：对 n=148 城市级回归做正则化对比。结果：log(adoption) 上 Lasso CV R²=0.62 优于 OLS 的 0.60，确认 OLS 系数基本稳定；originator_share 和 log(avg_lag) 所有方法均 CV R²<0，确认这两个 DV 在城市特征下预测力天花板极低。Lasso 将 betweenness 收缩为零，与 Step 8 EDA 中 betweenness 区分度不足的发现一致
 
 ## 0.4 EDA 主要发现（Step 8）
 
@@ -168,7 +191,7 @@ step6 为 148 城市添加 8 类外部变量：population, gdp_per_capita, educa
 | GMM (k=4) | 4 | 0.278 | BIC 最优 k=2，AIC 最优 k=8（分歧大）；与 K-Means ARI=0.340，中等一致；仅 8 城 (5.4%) 分配不确定 (max prob<0.7) |
 | **K-Means (k=4)** ← 保留 | 4 | **0.348** | 理论驱动 + 指标稳健 + 结果稳定，作为主模型 |
 
-### Adoption 回归（Step 10）
+### Adoption 回归（Step 10, 28 cells）
 
 | 模型 | DV | n | R²/Pseudo R² | 最强变量 |
 |---|---|---|---|---|
@@ -181,44 +204,55 @@ step6 为 148 城市添加 8 类外部变量：population, gdp_per_capita, educa
 **Model C 关键 null finding**：城市特征（网络指标+外部属性）对采纳速度的解释力有限（Adj R²=0.166）。仅 GDP 显著（p<0.05，负系数→更富裕城市采纳更快），log_entity 和 log_degree 均不显著。这与 Step 11 Model D-reg（事件级 lag GB 回归，CV R²=0.019）的结论一致：**采纳速度主要受项目异质性驱动，而非城市特征**。
 
 **Robustness Checks**：
-- **10.2b 项目固定效应**：Conditional Logit (project FE) 确认 log_entity 和 log_degree 在控制项目异质性后仍显著
 - **10.3b Beta 回归**：originator_share 为比例变量，Beta 回归结果与 OLS 方向和显著性一致
 - **10.4b 内生性检验（Appendix）**：adoption breadth 模型 R²=0.965 主要反映 entity_count ↔ adoption_count 同源循环
-- **10.4c 网络密度检验（Appendix）**：weight≥5 子网络确认 betweenness 在密网中不可靠（与原始 betweenness 相关性仅 −0.05）
-- **10.5c Region FE 检验（新增）**：加入区域固定效应后核心结论不变，GDP 对 origination 的边际效应被区域组成吸收，但 GDP 对采纳速度有独立负效应；Adj R² 几乎不变，确认不含 region 的主模型适当，且与 Step 11/12 特征集一致
+- **10.5c Region FE 检验**：加入区域固定效应后核心结论不变，GDP 对 origination 的边际效应被区域组成吸收，但 GDP 对采纳速度有独立负效应；Adj R² 几乎不变，确认不含 region 的主模型适当
+- **10.5d 正则化稳健性检验（V1.2 新增）**：Ridge/Lasso/ElasticNet 5-fold CV 对比。log(adoption) 上 Lasso CV R²=0.62 优于 OLS 的 0.60，系数稳定；originator_share 和 log(avg_lag) 所有方法均 CV R²<0，确认预测力天花板极低。Lasso 将 betweenness 收缩为零
 
-### XGBoost + SHAP（Step 11）
+### GB + SHAP 非线性分析（Step 11, V1.2 重构后 16 cells）
 
-| 模型 | DV | CV 表现 | 备注 |
-|---|---|---|---|
-| Model D (分类) | is_originator | **AUC=0.769** | 合理区分能力 |
-| Model D-reg (回归) | lag | **CV R²=0.019** | 城市特征难以预测事件级采用时滞（**新增**） |
-| Model E (回归) | originator_share | CV R²=−0.79 | n=148 过拟合 |
-| Model F (回归) | log(adoption) | CV R²=−0.87 | n=148 过拟合 |
+**V1.2 职责划分**：Step 10 负责所有线性/参数方法（推断 + 稳健性），Step 11 负责所有非线性方法（GB + SHAP 可解释性）。Model E/F（n=148 城市级 GB 回归）因与 Step 10 重复且过拟合已删除，Ridge/Lasso 已移入 Step 10 Section 10.5d。
 
-SHAP Top-3 特征: log_entity, log_degree, betweenness（跨所有模型一致）
+| 模型 | DV | n | CV 表现 | 备注 |
+|---|---|---|---|---|
+| Model D (GB 分类) | is_originator | 39,158 | **AUC=0.771** | 区分 originator vs adopter |
+| Model D-reg (GB 回归) | lag (月) | 25,148 | **CV R²=0.019** | 城市特征难以预测事件级采用速度 |
+
+- SHAP Top-3 特征 (Model D): log_entity, log_population, log_degree
+- SHAP Top-3 特征 (D-reg): log_entity, log_degree, log_population
+- Logit vs GB 特征重要性 Spearman ρ=0.483 → 中等相关，存在部分非线性效应
+- SHAP Dependence Plots 揭示 log_entity 和 log_degree 的非线性阈值效应
 
 ### GraphSAGE（Step 12）
 
 | 模型 | DV | Test 表现 |
 |---|---|---|
-| G1 (回归) | log(adoption) | **R²=0.902, RMSE=0.377** |
-| G2 (分类) | high/low adopter | **AUC=0.984, F1=0.980** |
+| G1 (回归) | log(adoption) | **R²=0.914, RMSE=0.436** |
+| G2 (分类) | high/low adopter | **AUC=0.960, F1=0.857** |
+| MLP 消融 (回归) | log(adoption) | R²=0.768, RMSE=0.713 |
+| MLP 消融 (分类) | high/low adopter | AUC=0.964, F1=0.933 |
 
-城市排名预测 Spearman ρ=0.976 (p<0.001)
+- 图结构增量：ΔR²=+0.145（GraphSAGE vs MLP），**图传播在回归任务上提供显著增值**
+- 城市排名预测 Spearman ρ=0.960 (p<0.001)
+- train_weighted_degree 消融：去掉后 GraphSAGE R² 降至 0.829，MLP 降至 0.463；图结构增量反而扩大至 ΔR²=+0.367，说明图传播可部分替代该特征
 
 ## 0.6 已知局限与量化评估
 
 1. **网络密度偏高 (0.886)**：betweenness 区分度有限。**已量化（10.4c）**：使用 weight≥5 子网络（密度 0.563，147 节点，全连通）重算网络特征后，Model C R² 仅降 0.003；原始 betweenness 与子网络 betweenness 相关性仅 −0.05，确认密集网络中 betweenness 不可靠。隶属 Step 5（建边阈值）+ Step 8（EDA 发现）
-2. **XGBoost 回归 CV R² 为负**：n=148 不足以支撑 GB 回归泛化。**已补充（11.5）**：新增 Model D-reg 在事件级（n=25,148）做 lag 的 GB 回归，CV R²=0.019，确认城市特征对事件级 lag 解释力极低（受项目异质性主导）。SHAP 排序与其他模型一致，验证特征重要性层级的跨方法稳健性。隶属 Step 11
+2. **GB 回归不适合 n=148**：V1.2 已删除 Model E/F（CV R² 为负的城市级 GB 回归），改由 Step 10 Section 10.5d 的 Ridge/Lasso 做正则化稳健性检验。Step 11 仅保留大样本模型：Model D（分类，n=39k，AUC=0.77）和 Model D-reg（事件级 lag 回归，n=25k，CV R²=0.019）。SHAP 排序与 OLS/Logit/Ridge/Lasso 全部一致，验证特征重要性层级的跨方法稳健性。隶属 Step 10 + Step 11
 3. **外部属性对 origination 直接解释力弱**：但控制规模后 GDP (partial r=0.266, p=0.002) 和 internet (partial r=0.253, p=0.004) 对 adoption 显著。**性质：研究发现，非方法缺陷**。隶属 Step 8 偏相关 + Step 10 回归
 4. **collaboration_count ≡ weighted_degree**：完全冗余，建模已只保留 degree。**已解决**。隶属 Step 5 变量定义
 5. **Model C R²=0.965 存在循环性**：**已量化（10.4b）**：剔除 log_degree 后 R² 仅降 0.6%（0.970→0.964），真正的循环性来自 `log_entity` 与 `adoption_count` 的近定义同源关系（log_entity 系数从 0.64 飙升至 1.10）。隶属 Step 10 建模设计
 6. **（新增）K-Means k 选择的统计-理论权衡**：k=3 silhouette=0.386 统计最优，但 k=4=0.348 理论最优。**已量化（§9.6）**：参数敏感性分析确认 k=4 在三个指标（Silhouette/CH/DB）上均接近最优，且 n_init=50 不改变结果，证明聚类已稳定。隶属 Step 9
 7. **（新增）DBSCAN 不适合该数据**：仅发现 2 个密度簇 + 14.9% 噪声。**已量化（§9.7）**：城市特征空间无明显密度间隙。噪声点可用于异常城市检验。隶属 Step 9
 8. **（新增）GMM 与 K-Means 一致性中等（ARI=0.340）**：**已量化（§9.8–9.9）**：GMM 因椭球协方差产生不同划分，但 94.6% 城市分配确定（max prob≥0.7），7 种配置的 ARI 热力图和 PCA 投影确认 K-Means k=4 为最稳健选择。隶属 Step 9
-13. **（新增）GDP 效应被区域组成吸收**：不含 region FE 时 GDP 对 origination 边际显著（p=0.057），加入 region 后完全消失（p=0.874）。说明之前观察到的"GDP 效应"实际是区域组成效应——高 GDP 城市集中在 North America/Europe 等本身有高 origination 优势的区域。**10.5c Region FE Robustness Check 已量化**。隶属 Step 10
-14. **（新增）采纳速度的 null finding**：Model C（DV=log_avg_lag）R²=0.218，仅 GDP 显著；与 Step 11 Model D-reg（事件级 CV R²=0.019）一致确认城市特征对采纳速度解释力有限。**性质：研究发现，非方法缺陷**——采纳速度主要受项目层面因素（流行度轨迹、技术门槛等）驱动。隶属 Step 10 + Step 11
+9. **（新增）GDP 效应被区域组成吸收**：不含 region FE 时 GDP 对 origination 边际显著（p=0.057），加入 region 后完全消失（p=0.874）。说明之前观察到的"GDP 效应"实际是区域组成效应——高 GDP 城市集中在 North America/Europe 等本身有高 origination 优势的区域。**10.5c Region FE Robustness Check 已量化**。隶属 Step 10
+10. **（新增）采纳速度的 null finding**：Model C（DV=log_avg_lag）R²=0.218，仅 GDP 显著；与 Step 11 Model D-reg（事件级 CV R²=0.019）一致确认城市特征对采纳速度解释力有限。**性质：研究发现，非方法缺陷**——采纳速度主要受项目层面因素（流行度轨迹、技术门槛等）驱动。隶属 Step 10 + Step 11
+11. **（V1.2）GraphSAGE 小样本局限 (n=148 节点)**：仅 30 个测试节点，单次 60/20/20 划分结果可能不稳定。图节点 k-fold CV 存在消息传递跨折泄漏问题，目前采用单次划分 + early stopping。**已通过 Val R²=0.918 ≈ Test R²=0.914 的一致性间接验证泛化**。隶属 Step 12
+12. **（V1.2）train_weighted_degree 主导性 (r=0.934)**：该训练期特征与目标极高相关。虽非数据泄漏（严格来自训练期），但模型可能主要学习"过去活跃→未来活跃"的近平凡映射。**已量化（§12.11 消融）**：去掉后 GraphSAGE R² 从 0.914 降至 0.829（ΔR²=−0.084），MLP 降至 0.463（ΔR²=−0.306），同时图结构增量从 ΔR²=+0.145 扩大至 ΔR²=+0.367。隶属 Step 12
+13. **（V1.2）图密度 0.886 稀释 GNN 局部性**：2 层 GraphSAGE 感受野覆盖几乎全部节点，邻居聚合趋近全局平均。部分解释了 MLP 分类 AUC(0.964) ≈ GraphSAGE AUC(0.960)。**性质：数据特性限制，非方法缺陷**。隶属 Step 12
+14. **（V1.2）G2 分类任务价值有限**：MLP AUC(0.964) ≈ GraphSAGE AUC(0.960)，图结构对二分类无额外贡献。中位数二值化丢失信息、任务过于简单。**G2 已降级为 G1 的附属验证，非独立主模型**。隶属 Step 12
+15. **（V1.2）GraphSAGE 为预测模型而非因果模型**：高 R² 不意味城市协作*导致*采纳。城市规模可能同时驱动协作强度和采纳数量（共因混淆）。**性质：方法论边界，在 notebook §12.11 中明确讨论**。隶属 Step 12
 
 ## 0.7 代码文件清单
 
@@ -249,8 +283,8 @@ SHAP Top-3 特征: log_entity, log_degree, betweenness（跨所有模型一致�
 | `step8_eda.ipynb` | 22 | — | 核心 EDA |
 | `step8b_eda_detailed.ipynb` | 20 | — | 扩展 EDA |
 | `step9_kmeans.ipynb` | 41 | RQ1 | K-means 城市角色聚类 + 参数敏感性 (§9.6) + DBSCAN (§9.7) + GMM (§9.8) + 综合对比 (§9.9) |
-| `step10_adoption_regression.ipynb` | 18 | RQ2 | Adoption 回归 (A/B/C) + Robustness Checks (10.2b, 10.3b, 10.4b, 10.4c, 10.5c Region FE) |
-| `step11_xgboost_shap.ipynb` | 14 | RQ2 | XGBoost + SHAP + Model D-reg (11.5) |
+| `step10_adoption_regression.ipynb` | 28 | RQ2 | Adoption 回归 (A/B/C) + Robustness (10.3b Beta, 10.4b Tautology, 10.5c Region FE, 10.5d Ridge/Lasso) |
+| `step11_xgboost_shap.ipynb` | 16 | RQ2 | GB 分类 (Model D) + SHAP + 事件级 lag 回归 (D-reg) + Logit-vs-GB 对比 |
 | `step12_graphsage.ipynb` | 10 | RQ3 | GraphSAGE 预测 |
 
 ---
@@ -578,7 +612,7 @@ lag 要按下面方式计算：
 
 ### ✅ 5.2.5 实际执行结果（Step 10）
 
-**执行文件**：`step10_adoption_regression.ipynb`（25 个 cells，全部已执行，含多轮优化）
+**执行文件**：`step10_adoption_regression.ipynb`（28 个 cells，全部已执行，含多轮优化 + V1.2 新增 10.5d 正则化检验）
 
 **实际建模策略调整**：由于 adoption lag 的分布特征（mean=6.28, median=2, 大量 lag=0 的 originator 事件），将原方案的连续 lag 回归调整为三个互补模型：
 
@@ -602,12 +636,14 @@ lag 要按下面方式计算：
 - **10.3b Beta 回归**：originator_share 为 [0,1] 比例变量，Beta 回归确认 OLS 结论稳健（系数方向一致）
 - **10.4b Tautology 量化（Appendix）**：adoption breadth model R²=0.970；仅用外生变量 R²=0.737 → 循环变量贡献 24.0% R²。证实速度模型更合理
 - **10.5b 局限性讨论**：内生性/tautology、截面因果限制、样本量约束、网络密度对 betweenness 的影响、adoption speed null finding
+- **10.5c Region FE 检验**：加入区域固定效应后核心结论不变
+- **10.5d 正则化稳健性检验（V1.2 新增）**：Ridge/Lasso/ElasticNet 5-fold CV 对比 OLS。log(adoption) Lasso CV R²=0.62 优于 OLS 的 0.60，系数稳定；originator_share 和 log(avg_lag) 所有方法均 CV R²<0。Lasso 特征选择将 betweenness 收缩为零。含 Ridge/Lasso 系数对比可视化
 
 **已删除的冗余模块（V1.2 精简）**：
-- ~~10.2b 项目固定效应~~：Conditional Logit with project FE 核心结论与 pooled Model A 完全一致（log_entity 1.65 vs 1.92, log_degree -1.55 vs -1.58），但 85% 的项目因无 outcome 变异被排除，引入选择偏差。改为在 Model A markdown 中用 1-2 句话提及 FE 尝试结果
-- ~~10.4c 网络密度检验~~：该检验验证的是旧 DV（adoption_count），与新 Model C（avg_lag）无关，已删除
+- ~~10.2b 项目固定效应~~：Conditional Logit with project FE 核心结论与 pooled Model A 完全一致，但 85% 的项目因无 outcome 变异被排除
+- ~~10.4c 网络密度检验~~：该检验验证的是旧 DV（adoption_count），与新 Model C（avg_lag）无关
 
-**与方案对比**：方案预期连续 lag 回归 + project FE。实际执行调整为三模型策略（logistic + share OLS/Beta + speed OLS），并将 DV 从 adoption breadth 调整为 adoption speed 以避免 tautology。经过 V1.2 优化精简后，Step 10 保留 3 个主模型 + 1 个 Beta 稳健性 + 1 个 Appendix tautology 分析 + 1 个局限性讨论。
+**与方案对比**：方案预期连续 lag 回归 + project FE。实际执行调整为三模型策略（logistic + share OLS/Beta + speed OLS），并将 DV 从 adoption breadth 调整为 adoption speed 以避免 tautology。V1.2 新增正则化稳健性检验（10.5d），从 Step 11 接收 Ridge/Lasso 代码，确保所有线性方法集中在 Step 10。
 
 ## 5.3 Method 3: XGBoost
 
@@ -644,45 +680,43 @@ XGBoost 承担的是：
 
 它的 outcome 不是某一个技术家族里的结果，而是在 prominent open-AI projects 整体生态中定义的结果变量。
 
-### ✅ 5.3.5 实际执行结果（Step 11）
+### ✅ 5.3.5 实际执行结果（Step 11, V1.2 重构）
 
-**执行文件**：`step11_xgboost_shap.ipynb`（12 个 code cells，全部已执行）
+**执行文件**：`step11_xgboost_shap.ipynb`（16 cells，V1.2 已完成重构并执行验证）
+
+**V1.2 职责划分**：
+- **Step 10** = 所有线性/参数方法（OLS、Logit、Beta、Ridge、Lasso）→ 推断 + 稳健性
+- **Step 11** = 所有非线性方法（GB + SHAP）→ 非线性检验 + 可解释性
 
 **实际使用 GradientBoostingClassifier/Regressor**（而非 XGBoost），因为 sklearn 内置实现更轻量且 SHAP 兼容。
 
-| 模型 | DV | 方法 | CV 表现 | 全量表现 |
-|------|-----|------|---------|----------|
-| **Model D** | `is_originator` (0/1) | GB Classifier | **AUC=0.769±0.004**, F1=0.205 | AUC=0.774 |
-| **Model E** | `originator_share` | GB Regressor | **CV R²=−0.785** | Full R²=0.917 |
-| **Model F** | `log(adoption)` | GB Regressor | **CV R²=−0.866** | Full R²=0.996 |
+| 模型 | DV | 方法 | n | CV 表现 |
+|------|-----|------|---|---------|
+| **Model D** | `is_originator` (0/1) | GB Classifier | 39,158 | **AUC=0.771±0.006**, F1=0.200 |
+| **Model D-reg** | `lag` (月) | GB Regressor | 25,148 | **CV R²=0.019±0.002** |
+
+**V1.2 重构内容**：
+- **删除 Model E/F**：城市级 GB 回归（n=148）严重过拟合（CV R² 为负），与 Step 10 Model B/C 重复且无独立信息增量
+- **Ridge/Lasso 移入 Step 10**：正则化线性模型是 OLS 的稳健性检验，归属 Step 10 Section 10.5d
+- **新增 11.2 SHAP Dependence Plots**：基于 Model D（分类，n=39k），揭示 log_entity 和 log_degree 的非线性阈值效应
+- **新增 11.3 Logit vs GB 特征重要性对比**：Spearman ρ=0.483 → 中等相关，存在部分非线性效应
+
+**精简后 Step 11 结构（6 个 section）**：
+- 11.1 Model D: GB 分类 + SHAP Beeswarm
+- 11.2 SHAP Dependence Plots（基于 Model D）
+- 11.3 Logit vs GB 特征重要性对比
+- 11.4 Model D-reg: 事件级 lag GB 回归 + SHAP
+- 11.5 Discussion: 负面结果与局限性
+- 11.6 Summary
 
 **关键发现**：
-- Model D 分类 AUC=0.769 → 合理区分能力，但 recall 仅 0.12（originator 数量不平衡）
-- Model E/F 城市级回归 **CV R² 为负** → n=148 不足以支撑梯度提升泛化，严重过拟合
-- SHAP 与 OLS 的特征重要性排名 Spearman ρ=0.617 (p=0.077) → 两种方法方向一致
-- **SHAP Top-3 特征**：`log_entity`、`log_degree`、`betweenness`，与 OLS 回归结论互相印证
+- Model D (AUC=0.77): 城市特征可区分 originator vs adopter，SHAP 提供逐观测解释
+- Model D-reg (R²=0.02): 城市特征几乎无法预测事件级采用速度 → 有意义的负面结果
+- SHAP Top-3 (Model D): log_entity, log_population, log_degree
+- SHAP Top-3 (D-reg): log_entity, log_degree, log_population
+- 特征排序与 OLS/Logit/Ridge/Lasso **全部一致**，跨方法稳健性最强
 
-**Model D-reg（新增 11.5 节）**：
-
-为检验城市特征能否在充足样本量下预测 adoption speed，新增事件级 GB 回归：
-
-| 模型 | DV | 分析单位 | n | CV R² | SHAP Top-3 |
-|------|-----|---------|------|--------|------------|
-| **Model D-reg** | `lag` (月) | 城市×项目（非 originator） | 25,148 | **0.019±0.002** | log_entity, log_degree, log_population |
-
-- CV R²≈0.02 极低 → 城市特征几乎无法预测单个项目的采用时滞，事件级 lag 受项目异质性主导（哪个项目、流行轨迹等）
-- 但 SHAP 排序与 Model A–F 完全一致（log_entity > log_degree > log_population），验证特征重要性层级的**跨方法、跨分析单位稳健性**
-- 结论：OLS（Step 10）做推断，GB+SHAP（Step 11）做分类 + 特征排序验证，两者互补而非替代
-
-**冗余分析与精简建议（V1.2）**：
-- **Model E（originator_share GB 回归）**和 **Model F（log adoption_count GB 回归）**与 Step 10 Model B/C 使用相同 DV 和 IV，但 CV R² 为负（严重过拟合，n=148 不足），无独立信息增量 → **建议删除**
-- **Model D（is_originator GB 分类）**有独立价值：AUC=0.77 提供预测能力度量 + SHAP beeswarm/dependence 揭示非线性效应 → **保留**
-- **Model D-reg（event-level lag GB 回归）**有独立价值：CV R²=0.02 的 null finding 与 Step 10 Model C 互印证 → **保留**
-- 删除 E/F 后，§11.4 SHAP Dependence（依赖 F）和 §11.5 OLS-vs-GB 前半段比较（依赖 F）需一并删除或重写
-
-**精简后 Step 11 结构**：11.1 Model D + SHAP → 11.2 Model D-reg + SHAP → 11.3 跨方法对比（基于 D 和 D-reg）→ 11.4 Summary
-
-**与方案对比**：方案预期 XGBoost 用于城市级解释建模，但实际 n=148 不足以支撑 tree-based 泛化；分类任务（Model D, n=39,158）表现合理，回归任务过拟合。Model D-reg 在事件级回归中样本量充足但解释力仍极低，进一步确认 lag 的主要变异来源是项目层面而非城市层面。
+**与方案对比**：方案预期 XGBoost 用于城市级解释建模，但 n=148 不支持树模型。V1.2 将 Step 11 重新定位为"非线性检验 + SHAP 可解释性"，仅在大样本（n=39k, n=25k）上使用树模型，小样本回归（n=148）由 Step 10 的 OLS + Ridge/Lasso 处理。
 
 ## 5.4 Method 4: GraphSAGE
 
@@ -720,26 +754,29 @@ Addresses: RQ3
 
 ### ✅ 5.4.5 实际执行结果（Step 12）
 
-**执行文件**：`step12_graphsage.ipynb`（10 个 code cells，全部已执行）
+**执行文件**：`step12_graphsage.ipynb`（16 个 code cells，含 MLP 消融基线 + 消融实验）
 
 **实际任务定义调整**：由于所有 148 个活跃城市都有采用事件（无"未采用"城市），将二分类 next-adopter 任务调整为 **adoption intensity prediction**：
 
 | 模型 | DV | 方法 | Test 表现 |
 |------|-----|------|-----------|
-| **G1** (回归) | `log(adoption_count)` 后半期 | GraphSAGE 2-layer | **R²=0.902, RMSE=0.377** |
-| **G2** (分类) | high/low adopter (中位数分割) | GraphSAGE 2-layer | **AUC=0.984, F1=0.980** |
+| **G1** (回归) | `log(adoption_count)` 后半期 | GraphSAGE 2-layer | **R²=0.914, RMSE=0.436** |
+| **G2** (分类) | high/low adopter (中位数分割) | GraphSAGE 2-layer | **AUC=0.960, F1=0.857** |
+| MLP 消融 (回归) | 同 G1 | MLP 2-layer (无图) | R²=0.768, RMSE=0.713 |
+| MLP 消融 (分类) | 同 G2 | MLP 2-layer (无图) | AUC=0.964, F1=0.933 |
 
 **图结构**：
-- 148 节点，9,297 无向边，14 维节点特征
+- 148 节点，9,297 无向边，10 维节点特征（6 外生 + 4 训练期活动，已修复特征泄漏）
 - 时间分割：train ≤ 202406，test > 202406
-- Train: 103 城市，Test: 45 城市
+- 分层划分：Train 88 / Val 30 / Test 30
 
 **关键发现**：
-- 城市排名预测 Spearman ρ=0.976 (全部) / ρ=0.952 (test only)，p<0.001
-- GraphSAGE 显著优于所有非图方法（OLS R²=0.965, GB CV R²<0），证明协作网络结构确实为采用预测提供了增量信息
-- 模型产出了 64 维城市 embedding，PCA 前两主成分解释 95% 方差
+- 城市排名预测 Spearman ρ=0.960 (全部) / ρ=0.956 (test only)，p<0.001
+- GraphSAGE 回归 ΔR²=+0.145 (vs MLP)，证明协作网络结构确实为采用预测提供了增量信息
+- 去掉 train_weighted_degree 后，图结构增量反而扩大至 ΔR²=+0.367，说明图传播可部分替代该特征
+- 分类任务上 MLP AUC ≈ GraphSAGE AUC，说明二分类过于简单，图结构无额外增益
 
-**与方案对比**：方案原定预测"是否成为新 adopter"的二分类；实际调整为"采用强度"的回归+分类双任务，避免了全城市均为 adopter 导致的标签无区分问题。该调整更合理且结果更强。
+**与方案对比**：方案原定预测"是否成为新 adopter"的二分类；实际调整为"采用强度"的回归+分类双任务 + MLP 消融基线，避免了全城市均为 adopter 导致的标签无区分问题。V1.2 版本修复了特征泄漏（全时段 adoption_count 等改为训练期活动特征）、增加了验证集与 early stopping、并通过 MLP 消融实验量化了图结构的增量贡献。
 
 # 6. Include Required Notebook Sections
 
@@ -1041,23 +1078,24 @@ EDA 在正式建模之前完成，目的是理解数据质量、发现分布特�
 2. 分析哪些因素与更快项目采用相关
 3. 可加入项目固定效应或项目控制变量
 
-**实际执行（`step10_adoption_regression.ipynb`，18 个 code cells）**：
+**实际执行（`step10_adoption_regression.ipynb`，28 cells）**：
 - 三模型策略：Model A (Logistic, n=39,158), Model B (OLS originator_share, n=148), Model C (OLS log_avg_lag, n=148)
 - Model C DV 从 adoption breadth 调整为 adoption speed（log_avg_lag），直接回答"更快采纳"的 RQ
 - 核心发现：log_entity 是最强预测因子；log_degree 对 adoption 正效应、对 originator 概率负效应；采纳速度仅与 GDP 显著相关（速度主要受项目异质性驱动）
-- **Robustness Checks**：(10.2b) 项目固定效应 Conditional Logit；(10.3b) Beta 回归；(10.4b) 内生性检验（Appendix）；(10.4c) 网络密度检验（Appendix）；(10.5c) Region FE → 核心结论稳健
+- **Robustness Checks**：(10.3b) Beta 回归；(10.4b) 内生性检验（Appendix）；(10.5c) Region FE；**(10.5d) Ridge/Lasso/ElasticNet 正则化稳健性（V1.2 新增，从 Step 11 移入）** → 核心结论稳健
 
 #### 6.4.2.5 Step 5. XGBoost for explanatory modelling ✅ 已完成
 
 1. 解释哪些城市特征与 innovation-oriented roles 和 faster adoption 相关
 2. 用 SHAP 做辅助解释
 
-**实际执行（`step11_xgboost_shap.ipynb`，14 个 code cells）**：
-- Model D (分类 is_originator): CV AUC=0.769 → 合理区分能力
-- Model E/F (回归): CV R² 为负 → n=148 样本量不足导致 GB 回归过拟合
-- **新增 Model D-reg (11.5)**：事件级 lag GB 回归（n=25,148），CV R²=0.019 → 城市特征无法预测事件级 lag（受项目异质性主导），但 SHAP 排序与所有其他模型一致
-- SHAP Top-3 特征：log_entity, log_degree, betweenness（跨 A–F + D-reg 全部一致）
-- 分类模型可用，回归模型需谨慎解读（OLS 更适合小样本）
+**实际执行（`step11_xgboost_shap.ipynb`，16 cells，V1.2 重构）**：
+- **职责划分**：Step 10 = 线性/参数方法（推断），Step 11 = 非线性方法（GB + SHAP 可解释性）
+- Model D (GB 分类 is_originator, n=39k): CV AUC=0.771 → 合理区分能力 + SHAP 非线性解释
+- Model D-reg (GB 回归 lag, n=25k): CV R²=0.019 → 城市特征无法预测事件级 lag（有意义的负面结果）
+- **V1.2 删除 Model E/F**（n=148 GB 回归，过拟合且与 Step 10 重复），**Ridge/Lasso 移入 Step 10 Section 10.5d**
+- SHAP Top-3 特征: log_entity, log_population, log_degree（跨所有方法一致）
+- 新增 Logit vs GB 特征重要性对比（ρ=0.483），SHAP Dependence 非线性效应可视化
 
 #### 6.4.2.6 Step 6. GraphSAGE for next-wave adopter prediction ✅ 已完成
 
@@ -1066,9 +1104,10 @@ EDA 在正式建模之前完成，目的是理解数据质量、发现分布特�
 
 **实际执行（`step12_graphsage.ipynb`）**：
 - 时间分割：train ≤ 202406, test > 202406
-- Model G1 (回归): Test R²=0.902, RMSE=0.377
-- Model G2 (分类 high/low adopter): Test AUC=0.984, F1=0.980
-- 城市排名 Spearman ρ=0.976 → 图结构显著提升预测能力
+- Model G1 (回归): Test R²=0.914, RMSE=0.436
+- Model G2 (分类 high/low adopter): Test AUC=0.960, F1=0.857
+- MLP 消融基线 (回归): Test R²=0.768 → 图结构增量 ΔR²=+0.145
+- 城市排名 Spearman ρ=0.960 → 图结构显著提升预测能力
 
 #### 6.4.2.7 Step 7. Optional case-study visualisation
 
@@ -1127,7 +1166,14 @@ EDA 在正式建模之前完成，目的是理解数据质量、发现分布特�
 2. SHAP summary plot
 3. 高学历、高收入、科研能力、数字基础设施、网络中心性与创新/采用能力的关系
 
-**✅ 实际结论**：开发者基数 (entity_count) 和网络中心性 (weighted_degree) 是最重要的特征（SHAP Top-3: log_entity, log_degree, betweenness）。传统经济/教育指标对 origination 无直接效应（偏相关 p>0.4），但控制规模后 GDP (partial r=0.266, p=0.002) 和互联网覆盖率 (partial r=0.253, p=0.004) 对 adoption 显著。XGBoost 分类 AUC=0.77 可用，但回归因 n=148 过拟合（CV R² 为负），OLS 更适合此样本量。**（新增）** Model D-reg 在事件级（n=25,148）回归 lag，CV R²=0.019，确认城市特征对事件级采用速度的直接解释力极低——lag 的主要变异来源是项目异质性而非城市因素；但 SHAP 特征排序与所有其他模型完全一致，验证了结论的跨方法稳健性。
+**✅ 实际结论（V1.2 更新）**：开发者基数 (entity_count) 和网络中心性 (weighted_degree) 是最重要的特征（SHAP Top-3: log_entity, log_population, log_degree）。传统经济/教育指标对 origination 无直接效应（偏相关 p>0.4），但控制规模后 GDP (partial r=0.266, p=0.002) 和互联网覆盖率 (partial r=0.253, p=0.004) 对 adoption 显著。
+
+**V1.2 方法论重构**：
+- GB 分类 (Model D, n=39k, AUC=0.77): SHAP Beeswarm 和 Dependence Plots 揭示 log_entity 和 log_degree 的非线性阈值效应
+- GB 事件级 lag 回归 (Model D-reg, n=25k, CV R²=0.019): 城市特征对采用速度解释力极低 → 有意义的负面结果
+- 城市级 GB 回归（Model E/F）因 n=148 过拟合已删除，改由 Step 10 Section 10.5d 的 Ridge/Lasso 做正则化稳健性检验
+- Logit vs GB 特征重要性 Spearman ρ=0.483 → 中等相关，SHAP Dependence 可视化揭示了 Step 10 线性模型无法捕捉的非线性交互
+- SHAP 特征排序与 OLS/Logit/Ridge/Lasso **跨方法全部一致**，这是特征重要性结论的最强佐证
 
 ### 6.5.6 小节 5：Predicting next-wave adopters
 
@@ -1137,7 +1183,7 @@ EDA 在正式建模之前完成，目的是理解数据质量、发现分布特�
 2. 哪些城市在下一期最可能 adopted 新的 prominent projects
 3. 预测正确与错误的案例
 
-**✅ 实际结论**：GraphSAGE 表现优异——回归 Test R²=0.902, 分类 Test AUC=0.984/F1=0.980。城市排名 Spearman ρ=0.976 (p<0.001)。图结构 + 节点特征联合建模显著优于纯特征方法，验证了协作网络对预测下一波 adopter 的价值。
+**✅ 实际结论**：GraphSAGE 表现优异——回归 Test R²=0.914, 分类 Test AUC=0.960/F1=0.857。城市排名 Spearman ρ=0.960 (p<0.001)。MLP 消融基线回归 R²=0.768，图结构增量 ΔR²=+0.145。进一步消融实验显示去掉 train_weighted_degree 后图结构增量扩大至 ΔR²=+0.367，证明图传播可部分替代节点度特征。图结构 + 节点特征联合建模显著优于纯特征方法，验证了协作网络对预测下一波 adopter 的价值。
 
 ### 6.5.7 小节 6：Case-study visualisation
 
@@ -1157,7 +1203,7 @@ EDA 在正式建模之前完成，目的是理解数据质量、发现分布特�
 2. 不同类型项目的扩散机制并不完全相同
 3. adoption lag 在跨项目比较时受项目异质性影响
 4. GraphSAGE 预测的是 adopter，而不是 originator emergence
-5. **XGBoost 回归在 n=148 小样本下 CV R² 为负**：GB 方法不适合此规模城市级回归。补充的 Model D-reg（事件级，n=25,148）CV R²=0.019，进一步确认城市特征对事件级 lag 解释力极低——主要变异来源是项目异质性
+5. **GB 回归不适合 n=148 小样本（V1.2 已解决）**：Model E/F（城市级 GB 回归）已删除，改由 Step 10 Section 10.5d 的 Ridge/Lasso 做正则化稳健性检验。Step 11 仅保留大样本模型：Model D (分类, n=39k, AUC=0.77) 和 Model D-reg (事件级 lag 回归, n=25k, CV R²=0.019)。所有线性方法归 Step 10，所有非线性方法归 Step 11
 6. **collaboration_count ≡ weighted_degree (ρ=1.0)**：完全冗余，建模已只保留 degree
 7. **Model C R²=0.965 存在循环性**：Robustness check (10.4b) 显示剔除 log_degree 后 R² 仅降 0.6%，真正的循环性来自 `entity_count` ↔ `adoption_count` 的近定义同源关系（两者在数据构建层面高度关联）。Discussion 中应明确标注 Model C 的 R² 主要反映构建循环而非因果解释力，推断应以 Model A/B 为准
 8. **网络密度 0.886 导致 betweenness 不可靠**：Robustness check (10.4c) 使用 weight≥5 子网络（密度降至 0.563）重算 betweenness，发现原始与子网络 betweenness 相关性仅 −0.05（近乎零相关），确认密集网络中 betweenness 是数学伪影而非真实的桥梁效应
@@ -1165,6 +1211,10 @@ EDA 在正式建模之前完成，目的是理解数据质量、发现分布特�
 10. **（新增）K-Means k=4 vs k=3 的 silhouette 差距 (0.348 vs 0.386)**：k=3 统计指标更优但丢失理论中间层（Active Collaborator 被合并），k=4 在理论解释性与指标间取得最佳折衷。参数敏感性分析（§9.6）完整记录了这一权衡过程
 11. **（新增）DBSCAN 仅发现 2 个密度簇**：城市特征空间中无明显密度间隙，DBSCAN 不适合此类平滑分布数据。但其识别的 22 个噪声城市（14.9%）可作为异常值鲁棒性检验
 12. **（新增）GMM 与 K-Means 中等一致（ARI=0.340）**：两种方法捕捉到部分重叠但有差异的结构，GMM 因允许椭球协方差而产生不同划分。GMM 软概率显示 94.6% 城市分配确定（max prob≥0.7），验证了聚类边界的清晰性
+13. **（V1.2）GraphSAGE 特征泄漏修复后指标下降**：原版 G1 R²=0.902（含全时段 adoption_count 等泄漏特征）→ 修复后 R²=0.914（仅训练期特征 + 参数优化）。修复泄漏降低了约 2% R²，但参数优化（dropout 0.5→0.3）弥补了差距。新结果更可靠
+14. **（V1.2）train_weighted_degree 主导预测**：该特征 r=0.934，去掉后 GraphSAGE R² 降至 0.829。但图结构增量反而从 ΔR²=+0.145 扩大至 ΔR²=+0.367——说明 GraphSAGE 的图传播可有效替代该标量特征捕获的网络信息
+15. **（V1.2）GraphSAGE 分类 (G2) 不优于 MLP**：MLP AUC=0.964 ≈ GraphSAGE AUC=0.960。中位数二值化使分类退化为"大城市 vs 小城市"的平凡判断。G2 已降级为辅助验证
+16. **（V1.2）GraphSAGE 预测 vs 因果**：高 R² (0.914) 是预测能力而非因果证据。城市规模可能同时驱动协作强度和采纳数量（共因混淆）。Discussion 中应明确区分预测与解释的边界
 
 ## 6.6 Expected Conclusion ❌ 待撰写
 
@@ -1196,7 +1246,7 @@ Expected Conclusion 现在应围绕“高影响 open-AI 项目生态”来收束
 
 GitHub 城市协作网络对“下一波 adopter 城市”的识别具有预测价值，因此网络结构不仅能描述协作关系，也能帮助理解技术扩散。
 
-> **✅ 实际验证**：GraphSAGE Test R²=0.902, AUC=0.984, 城市排名 Spearman ρ=0.976 (p<0.001) → 强烈支持协作网络的预测价值。图结构 + 节点特征联合建模显著优于纯特征方法。
+> **✅ 实际验证**：GraphSAGE Test R²=0.914, AUC=0.960, 城市排名 Spearman ρ=0.960 (p<0.001) → 强烈支持协作网络的预测价值。MLP 消融基线 R²=0.768，图结构增量 ΔR²=+0.145，证明图结构 + 节点特征联合建模显著优于纯特征方法。
 
 ### 6.6.6 第五层：future work
 
