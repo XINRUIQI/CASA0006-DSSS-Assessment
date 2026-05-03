@@ -232,7 +232,7 @@ Step 12 进行了全面的方法论审查与优化：
 - **10.3b Beta 回归**：originator_share 为比例变量，Beta 回归结果与 OLS 方向和显著性一致
 - **10.4b 内生性检验（Appendix）**：adoption breadth 模型 R²=0.965 主要反映 entity_count ↔ adoption_count 同源循环
 - **10.5c Region FE 检验**：加入区域固定效应后核心结论不变，GDP 对 origination 的边际效应被区域组成吸收，但 GDP 对采纳速度有独立负效应；Adj R² 几乎不变，确认不含 region 的主模型适当
-- **10.5d 正则化稳健性检验（V1.2 新增）**：Ridge/Lasso/ElasticNet 5-fold CV 对比。log(adoption) 上 Lasso CV R²=0.62 优于 OLS 的 0.60，系数稳定；originator_share 和 log(avg_lag) 所有方法均 CV R²<0，确认预测力天花板极低。Lasso 将 betweenness 收缩为零
+- **10.5d 正则化稳健性检验（V1.2 新增）**：Ridge/Lasso/ElasticNet 5-fold CV 对比。log(adoption) 上 Lasso CV R²=0.62 优于 OLS 的 0.60，系数稳定；originator_share 和 log(avg_iei) 所有方法均 CV R²<0，确认预测力天花板极低。Lasso 将 betweenness 收缩为零
 
 ### XGBoost + SHAP 事件级分析（Step 11, V1.5）
 
@@ -570,8 +570,8 @@ K-means 在所有 prominent open-AI projects 聚合形成的城市层指标上�
 | 2 | `adoption_count` | log1p | 采纳广度 | — (原始) | Wachs et al. (2022) |
 | 3 | `betweenness` | log1p(×1000) | 桥梁/中介角色 | — (原始) | Balland & Boschma (2021) |
 | 4 | `origination_rate_pop` | log1p | 人均创新强度 | — (原始) | Wachs et al. (2022) |
-| 5 | **`avg_lag`** | log1p | 采纳速度 | 0.726 (origination) | Rogers (2003); Balland et al. (2020) |
-| 6 | **`lag_std`** | log1p | 采纳时间一致性 | 0.728 (avg_lag) | Lamba et al. (2020) |
+| 5 | **`avg_iei`** | log1p | 采纳速度（IEI，控制项目年龄混淆；与 §7.3 / §11 因变量一致） | ~0.7 (origination)（待重算） | Rogers (2003); Balland et al. (2020) |
+| 6 | **`lag_std`** | log1p | 采纳时间一致性 | ~0.7 (avg_iei)（待重算） | Lamba et al. (2020) |
 | 7 | **`cross_region_ratio`** | 无 (已 [0,1]) | 协作地理广度（跨洲占比） | 0.326 (orig_rate_pop) | Balland & Boschma (2021) |
 | 8 | **`pop_top25_share`** | 无 (已 [0,1]) | 高影响力项目参与率 | 0.349 (orig_rate_pop) | Nature Global Innovation Hubs (2025) |
 | 9 | **`orig_top25_share`** | 无 (已 [0,1]) | 创始项目质量 | 0.135 (adoption) | Feldman & Audretsch (1999) |
@@ -682,7 +682,7 @@ K-means 在所有 prominent open-AI projects 聚合形成的城市层指标上�
 | `log_degree` | **56.41** | 🔴 与 `log_adoption` 近乎完全共线 |
 | `log_origination` | 12.38 | ⚠️ 与 adoption/degree 强相关 |
 | `log_betweenness` | 7.63 | ⚠️ 与 degree r=-0.912 |
-| `log_avg_lag` | 6.23 | ⚠️ 与 origination r=-0.726 |
+| `log_avg_iei` | 6.23 | ⚠️ 与 origination 负相关（原 avg_lag，待重算） |
 | 其余 7 个新特征 | 全部 < 3.2 | ✅ 无共线性问题 |
 
 **决策**：移除 `weighted_degree`（VIF=56.41）。理由：(1) 与 `adoption_count` 的 Pearson r=0.973，在 K-Means 欧氏距离中等同于对"活动规模"维度赋双倍权重；(2) `adoption_count` 更直接对应 RQ（采纳广度），且概念独立性更强；(3) 移除后 VIF 显著改善（log_adoption 从 60.85 降至 14.10，log_betweenness 从 7.63 降至 4.86）。
@@ -693,7 +693,7 @@ K-means 在所有 prominent open-AI projects 聚合形成的城市层指标上�
 |---|---|---|
 | `log_adoption` | 14.10 | ⚠️ 可接受（与 origination 的固有关联） |
 | `log_origination` | 11.82 | ⚠️ 可接受 |
-| `log_avg_lag` | 5.55 | ⚠️ 可接受 |
+| `log_avg_iei` | 5.55 | ⚠️ 可接受（原 avg_lag，待重算） |
 | `log_betweenness` | 4.86 | ✅ |
 | `log_orig_rate` | 2.94 | ✅ |
 | `log_lag_std` | 3.07 | ✅ |
