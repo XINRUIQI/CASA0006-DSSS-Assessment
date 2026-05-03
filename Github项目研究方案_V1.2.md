@@ -97,7 +97,7 @@ step6 为 148 城市添加 8 类外部变量：population, gdp_per_capita, educa
 - **Step 11 = 所有非线性方法**（树模型 + SHAP）→ 非线性检验 + 可解释性
 
 具体变更：
-1. **Step 10 新增 10.5d**：Ridge/Lasso/ElasticNet 正则化稳健性检验（从 Step 11 移入），对 originator_share、log(adoption)、log(avg_lag) 三个 DV 做 5-fold CV 对比，含系数可视化和 Lasso 特征选择
+1. **Step 10 新增 10.5d**：Ridge/Lasso/ElasticNet 正则化稳健性检验（从 Step 11 移入），对 originator_share、log(adoption)、log(avg_iei) 三个 DV 做 5-fold CV 对比，含系数可视化和 Lasso 特征选择
 2. **Step 11 删除 Model E/F**：GB 回归（n=148）严重过拟合（CV R² 为负），与 Step 10 OLS 重复且无独立信息增量
 3. **Step 11 精简（V1.3）**：删除 Model D（GB 分类，n=39k），**仅保留 Model D-reg**（事件级 lag 回归，n≈25k）。**V1.5（2026-05-02）**：主模型改为 **IEI（inter-event interval）** + **4-way 敏感性**，详见 **优化 9**
 
@@ -124,7 +124,7 @@ Step 12 进行了全面的方法论审查与优化：
 6. **（新增）9.8 GMM 替代模型**：BIC/AIC 模型选择 + k=3/4/5 对比 → GMM(k=4) sil=0.278，与 K-Means ARI=0.340；94.6% 城市分配确定，软概率可量化边界城市
 7. **（新增）9.9 跨方法综合对比**：7 种聚类配置 × 3 指标 + ARI 热力图 + PCA 投影，系统确认 K-Means k=4 为最优选择
 8. **（新增）10.5c Region FE 检验**：对 Models A/B/C 加入 9 类宏观区域固定效应，验证核心结论稳健性。发现：(1) log_entity 和 log_degree 保持显著方向不变；(2) GDP 对 origination 的效应被区域组成完全吸收；(3) 外部属性仍全面不显著；(4) Adj R² 几乎不变，确认主模型（不含 region FE）适当。主模型特征集与 Step 11/12 保持一致以支持跨方法对比
-9. **（新增）10.5d Ridge/Lasso/ElasticNet 稳健性检验**：对 n=148 城市级回归做正则化对比。结果：log(adoption) 上 Lasso CV R²=0.62 优于 OLS 的 0.60，确认 OLS 系数基本稳定；originator_share 和 log(avg_lag) 所有方法均 CV R²<0，确认这两个 DV 在城市特征下预测力天花板极低。Lasso 将 betweenness 收缩为零，与 Step 8 EDA 中 betweenness 区分度不足的发现一致
+9. **（新增）10.5d Ridge/Lasso/ElasticNet 稳健性检验**：对 n=148 城市级回归做正则化对比。结果：log(adoption) 上 Lasso CV R²=0.62 优于 OLS 的 0.60，确认 OLS 系数基本稳定；originator_share 和 log(avg_iei) 所有方法均 CV R²<0，确认这两个 DV 在城市特征下预测力天花板极低。Lasso 将 betweenness 收缩为零，与 Step 8 EDA 中 betweenness 区分度不足的发现一致
 
 ### 优化 9：Step 11 Model D-reg 升级为 XGBoost + IEI + 4-way 敏感性（V1.5, 2026-05-02）
 
@@ -145,7 +145,7 @@ Step 12 进行了全面的方法论审查与优化：
 - 全样本拟合 R²（log）≈ 0.56、（raw lag）≈ 0.46（仅作参考，以 CV 为准）
 - **SHAP（`shap.TreeExplainer`）全局排序（mean|SHAP| Top-5）**：`proj_origin_idx`, `log_proj_pop`, `log_forks`, `fork_star_ratio`, `popularity_pctile` —— **项目侧占主导**；城市块中 `log_population`, `origination_rate`, `eigenvector_centrality` 等仍有可见贡献
 
-**与 Step 10 的衔接**：Model C 在城市均值 `log(avg_lag)` 上 Adj R² 有限、仅 GDP 显著；Step 11 在事件级控制可观测**项目**异质性后 R²≈0.30，**仍支持采纳时机主要由项目（及未观测因素）驱动**，两处结论一致，粒度不同。
+**与 Step 10 的衔接**：Model C（V1.3 改用 `log1p(avg_iei)`）与 Step 11 D-reg-IEI 在因变量定义上统一；Step 10 描述城市截面均值，Step 11 在事件级控制可观测**项目**异质性（R²≈0.30），两处均支持**采纳时机主要由项目（及未观测因素）驱动**，粒度不同但结论一致。
 
 **工程**：`requirements.txt` 已增加 `xgboost`。
 
@@ -220,13 +220,13 @@ Step 12 进行了全面的方法论审查与优化：
 | 模型 | DV | n | R²/Pseudo R² | 最强变量 |
 |---|---|---|---|---|
 | Model B (OLS) | originator_share | 148 | R²=0.247, Adj R²=0.198 | log_entity (+), log_degree (−) |
-| Model C (OLS) | log(avg_lag) | 148 | R²=0.218, Adj R²=0.166 | log_gdp (−) → 更富裕城市采纳更快 |
+| Model C (OLS) | log1p(avg_iei) | 148 | R²=TBD（重算中） | IEI = 城市采纳距上一采纳城市的月数；比 avg_lag 更能控制项目年龄混淆 |
 
-**Model C 重大调整**：原 Model C 的 DV 从 `log(adoption_count)` 改为 `log(avg_lag)`（非 originator 事件的平均采用时滞）。这直接回答了"哪些城市特征与更快采纳相关"这一 RQ3 核心问题。原 adoption breadth 模型（R²=0.965，存在 tautology）移至 Appendix 10.4b。
+**Model C 重大调整（V1.3）**：原 Model C 的 DV 从 `log(adoption_count)` 改为 `log(avg_lag)`（非 originator 事件的平均采用时滞）。**V1.3 进一步调整**：DV 从 `log(avg_lag)` 改为 `log1p(avg_iei)`（城市级平均 Inter-Event Interval），以消除项目年龄混淆：avg_lag 对老项目天然偏大，IEI 仅衡量该城市相对于前一个采纳城市的响应速度，与 Step 11 Model D-reg-IEI 保持因变量一致性。原 adoption breadth 模型（R²=0.965，存在 tautology）移至 Appendix 10.4b。
 
 **V1.3 精简**：删除 Model A（Logistic 回归，聚类标准误）和 Model B-Beta（Beta 回归鲁棒性检验）。保留 Model B（OLS originator_share，对应 RQ2 创新导向角色）、Model C（OLS adoption speed，对应 RQ3 采纳速度）和 Appendix 10.4b（adoption breadth 同义反复分析，对应 RQ2 采纳广度）。
 
-**Model C 关键 null finding**：城市特征（网络指标+外部属性）对采纳速度的解释力有限（Adj R²=0.166）。仅 GDP 显著（p<0.05，负系数→更富裕城市采纳更快），log_entity 和 log_degree 均不显著。**与 Step 11 相呼应**：Step 10 描述的是**城市均值**上的速度；Step 11（V1.5）在**事件级**以 IEI 为因变量、加入可观测**项目**属性并用 XGBoost 后，CV R²≈0.31，SHAP 仍显示**项目侧变量主导**、城市 `betweenness` 在 IEI 视角下更突出——**采纳时机主要由项目异质性与未观测因素驱动**的结论与 Model C 一致，而非矛盾。
+**Model C（IEI 版）**：DV 改为 `log1p(avg_iei)`（城市级平均 Inter-Event Interval，非发起城市事件，IEI≥0）。IEI 控制项目年龄混淆，与 Step 11 D-reg-IEI 的事件级因变量保持一致。结果待重新运行后更新（预期结论方向与 avg_lag 版相近：城市特征解释力有限，项目异质性主导）。**与 Step 11 相呼应**：两层均以 IEI 为速度指标，确保城市截面（OLS）与事件级（XGBoost）分析在方法论上一致。
 
 **Robustness Checks**：
 - **10.3b Beta 回归**：originator_share 为比例变量，Beta 回归结果与 OLS 方向和显著性一致
@@ -274,7 +274,7 @@ Step 12 进行了全面的方法论审查与优化：
 7. **（新增）DBSCAN 不适合该数据**：仅发现 2 个密度簇 + 14.9% 噪声。**已量化（§9.7）**：城市特征空间无明显密度间隙。噪声点可用于异常城市检验。隶属 Step 9
 8. **（新增）GMM 与 K-Means 一致性中等（ARI=0.340）**：**已量化（§9.8–9.9）**：GMM 因椭球协方差产生不同划分，但 94.6% 城市分配确定（max prob≥0.7），7 种配置的 ARI 热力图和 PCA 投影确认 K-Means k=4 为最稳健选择。隶属 Step 9
 9. **（新增）GDP 效应被区域组成吸收**：不含 region FE 时 GDP 对 origination 边际显著（p=0.057），加入 region 后完全消失（p=0.874）。说明之前观察到的"GDP 效应"实际是区域组成效应——高 GDP 城市集中在 North America/Europe 等本身有高 origination 优势的区域。**10.5c Region FE Robustness Check 已量化**。隶属 Step 10
-10. **（新增）采纳速度与 Step 11 事件级模型**：Model C（DV=log_avg_lag，n=148）R²=0.218，仅 GDP 显著；**Step 11 D-reg-IEI（V1.5，n≈25.3k）** 在控制可观测**项目**属性后 CV R²≈0.31，SHAP **项目侧主导**——两处一致支持「时机主要由项目异质性驱动」，城市块为截面或事件上的**边际**信号。**性质：研究发现，非方法缺陷**。隶属 Step 10 + Step 11
+10. **（新增）采纳速度与 Step 11 事件级模型**：Model C（DV=log_avg_iei，n=148）R²=TBD（重算中）；**Step 11 D-reg-IEI（V1.5，n≈25.3k）** 在控制可观测**项目**属性后 CV R²≈0.31，SHAP **项目侧主导**——两处均以 IEI 为速度因变量，一致支持「采纳时机主要由项目异质性驱动」，城市块为截面或事件上的**边际**信号。**性质：研究发现，非方法缺陷**。隶属 Step 10 + Step 11
 11. **（V1.2）GraphSAGE 小样本局限 (n=148 节点)**：仅 30 个测试节点，单次 60/20/20 划分结果可能不稳定。图节点 k-fold CV 存在消息传递跨折泄漏问题，目前采用单次划分 + early stopping。**已通过 Val R²=0.918 ≈ Test R²=0.914 的一致性间接验证泛化**。隶属 Step 12
 12. **（V1.2）train_weighted_degree 主导性 (r=0.934)**：该训练期特征与目标极高相关。虽非数据泄漏（严格来自训练期），但模型可能主要学习"过去活跃→未来活跃"的近平凡映射。**已量化（§12.11 消融）**：去掉后 GraphSAGE R² 从 0.914 降至 0.829（ΔR²=−0.084），MLP 降至 0.463（ΔR²=−0.306），同时图结构增量从 ΔR²=+0.145 扩大至 ΔR²=+0.367。隶属 Step 12
 13. **（V1.2）图密度 0.886 稀释 GNN 局部性**：2 层 GraphSAGE 感受野覆盖几乎全部节点，邻居聚合趋近全局平均。部分解释了 MLP 分类 AUC(0.964) ≈ GraphSAGE AUC(0.960)。**性质：数据特性限制，非方法缺陷**。隶属 Step 12
@@ -578,6 +578,92 @@ K-means 在所有 prominent open-AI projects 聚合形成的城市层指标上�
 | 10 | **`lag_quality_corr`** | 无 (已连续) | 趋势引领 vs 追随 | 0.177 (cross_region) | Rogers (2003) adopter categories |
 | 11 | **`avg_fork_star_ratio`** | 无 (已连续) | 项目实用深度 (fork/star) | 0.290 (origination) | 开源软件实用性度量文献 |
 
+#### 5.1.4c 特征构造：五张核心 CSV 数据字典（Variable / Type / Definition）
+
+以下为 Step 5–6 及 Step 1c 产出的 Tabular 模式说明，格式与统计课程中「变量–类型–定义」表一致，供方法与可复现文档引用。
+
+**`city_attributes.csv`（城市级属性表，≈148 行）**
+
+| Variable | Type | Definition |
+| :--- | :--- | :--- |
+| `city` | Categorical | 标准化城市名，与 `city_list.matched_city` 对齐。 |
+| `country` | Categorical | 国家名称。 |
+| `lat` | Continuous | 城市纬度（°）。 |
+| `lon` | Continuous | 城市经度（°）。 |
+| `entity_count` | Count | 该城在目标样本中关联的 GitHub/HF 实体数（来自 `city_list`，作规模/活跃度分母）。 |
+| `origination_count` | Count | 城市作为项目创始方的事件条数（`city_project_adoption_events` 中 `is_originator`=1 的行数）。 |
+| `origination_rate` | Continuous | `origination_count / entity_count`；按实体规模标准化的创始强度。 |
+| `adoption_count` | Count | 该城参与采纳的**不重复** `project_id` 数量。 |
+| `adoption_rate` | Continuous | `adoption_count / entity_count`。 |
+| `avg_lag` | Continuous | 该城所有采纳事件的平均滞后（月）。 |
+| `median_lag` | Continuous | 同上，中位滞后（月）。 |
+| `collaboration_count` | Count | 在聚合协作网络上，该城与所有邻居的 `edge_weight` 之和（无向，源+汇）。 |
+| `weighted_degree` | Continuous | 协作无向图的加权度（与 `collaboration_count` 在本构造中等价）。 |
+| `betweenness` | Continuous | 加权介数中心性。 |
+| `eigenvector_centrality` | Continuous | 加权特征向量中心性（网络不收敛时可能为 0 或缺失填 0）。 |
+| `population_million` | Continuous | 都市区人口（百万）；Step6 外部表。 |
+| `gdp_per_capita` | Continuous | 国家人均 GDP（现价美元，约 2023）；Step6。 |
+| `education_tertiary_pct` | Continuous | 国家高等教育毛入学率（%）；Step6。 |
+| `internet_users_pct` | Continuous | 国家互联网用户占比（%）；Step6。 |
+| `rd_expenditure_pct` | Continuous | 国家研发支出占 GDP（%）；Step6。 |
+| `research_capacity` | Count | QS top-500 等高校个数的城市代理；Step6。 |
+| `timezone_utc` | Continuous | 由经度粗略推算的 UTC 偏移（小时，0.5 步长）。 |
+| `region` | Categorical | 宏观区域（如 East Asia、Europe、North America）。 |
+| `origination_rate_pop` | Continuous | 每百万人口的创始事件强度；分母为 `population_million×10⁶`。 |
+| `adoption_rate_pop` | Continuous | 每百万人口的采纳项目强度。 |
+| `collaboration_rate_pop` | Continuous | 每百万人口的协作边权总和强度。 |
+| `cluster` | Ordinal | K-means 等聚类赋予的簇编号（分析阶段写回；非 Step6 默认列）。 |
+| `role` | Categorical | 对 `cluster` 的语义标签（如 Global Innovation Hub）；分析阶段写回。 |
+
+**`city_project_adoption_events.csv`（城市–项目采纳事件）**
+
+| Variable | Type | Definition |
+| :--- | :--- | :--- |
+| `city` | Categorical | 城市名。 |
+| `project_id` | Identifier | 项目键：GitHub 为 `owner/repo`，HF 为 `hf_*` 前缀键。 |
+| `global_origin_month` | Discrete | 项目全局起源月 `YYYYMM`。 |
+| `city_first_adoption_month` | Discrete | 该城首次与该项目的关联月 `YYYYMM`。 |
+| `lag` | Count | `city_first_adoption_month` 相对 `global_origin_month` 的滞后月数（≥0）。 |
+| `is_originator` | Binary | 该城是否为该项目的创始方（1/0）。 |
+
+**`city_collaboration_edges.csv`（城市对协作边，聚合）**
+
+| Variable | Type | Definition |
+| :--- | :--- | :--- |
+| `source_city` | Categorical | 无向对中字典序较小（或规则化）的一端城市。 |
+| `target_city` | Categorical | 无向对的另一端城市。 |
+| `edge_weight` | Count | 两城**共同关联**的“项目单元”数（GitHub：同库多城；HF：每条衍生关系计 1 个命名空间单元）。 |
+| `shared_projects` | Count | 与 `edge_weight` 在本流水线中同步累加，数值上与 `edge_weight` 一致。 |
+
+**`city_collaboration_edges_monthly.csv`（城市对 × 月协作快照）**
+
+| Variable | Type | Definition |
+| :--- | :--- | :--- |
+| `source_city` | Categorical | 同聚合表。 |
+| `target_city` | Categorical | 同聚合表。 |
+| `month` | Discrete | 该协作边被归因到的日历月 `YYYYMM`（由参与项目的创建月/衍生月进入月度集合）。 |
+| `edge_weight` | Binary / Count | 当前实现中对每个 `(source,target,month)` 记为 **1**（该月至少存在一条归因协作）。 |
+
+**`prominent_projects_master.csv`（重要项目主表，`data/processed/`）**
+
+| Variable | Type | Definition |
+| :--- | :--- | :--- |
+| `project_id` | Identifier | 统一项目主键（如 `gh_*`、`hf_*`）。 |
+| `platform` | Categorical | `GitHub` 或 `HuggingFace`。 |
+| `full_id` | Identifier | 平台原生全名（repo 全名或 HF id）。 |
+| `project_name` | Categorical | 展示用短名。 |
+| `hf_type` | Categorical | HF 资源类型；GitHub 行为空。 |
+| `tags` | Categorical | 标签字符串（多标签以分号等分隔）。 |
+| `metric_stars` | Count | GitHub stars；HF 行常为空或 0。 |
+| `metric_forks` | Count | GitHub forks；HF 行常为空或 0。 |
+| `metric_downloads` | Count | HF downloads；GitHub 行常为空。 |
+| `metric_likes` | Count | HF likes；GitHub 行常为空。 |
+| `created_at` | Categorical | ISO8601 创建时间字符串。 |
+| `open_ai_related` | Binary | 是否与开放/AI 主题相关（筛选字段）。 |
+| `ai_evidence` | Categorical | 主题证据标签串。 |
+| `ai_confidence` | Ordinal | 规则/模型给出的置信档位（如 high/medium/low）。 |
+| `prominent_flag` | Binary | 本表仅保留 **prominent_flag = 1** 的重要项目。 |
+
 **新增特征构造方法**：
 - #5–6：从 `city_project_adoption_events.csv` 按城市聚合 lag 的均值和标准差
 - #7：从 `city_collaboration_edges.csv` 计算每个城市跨洲协作权重占总协作权重的比例
@@ -819,13 +905,13 @@ lag 要按下面方式计算：
 |------|-----|---------|---|------|----------|
 | **Model A** | `is_originator` (0/1) | 城市×项目 | 39,158 | Logistic (clustered SE) | Pseudo R²=0.090 |
 | **Model B** | `originator_share` | 城市 | 148 | OLS (HC1) + Beta 回归 | R²=0.247, Adj R²=0.198 |
-| **Model C** | `log(avg_lag_nonorig)` | 城市 | 148 | OLS (HC1) + Region FE | R²=0.265, Adj R²=0.159 |
+| **Model C** | `log1p(avg_iei)` | 城市 | 148 | OLS (HC1) + Region FE | R²=TBD（重算中） |
 
-**Model C DV 调整说明（V1.2 优化）**：原 Model C 使用 `log(adoption_count)` 作为 DV（测量采用广度），R²=0.970 但存在严重 tautology（entity_count ↔ adoption_count 同源循环，循环变量贡献 R² 的 24.0%）。根据审查，DV 调整为 `log(avg_lag_nonorig)`（仅非 originator 事件的平均采用时滞），直接回应 RQ "faster adoption"——网络中心性 → 信息流速 → 更短 lag 是合理因果路径，消除了定义循环。原 adoption breadth 模型降级为 Appendix 10.4b 做 tautology 量化分析。
+**Model C DV 调整说明（V1.3 优化）**：原 Model C 的 DV 经两次调整：(1) V1.2 从 `log(adoption_count)` 改为 `log(avg_lag_nonorig)` 以消除 tautology；(2) **V1.3 进一步从 `log(avg_lag)` 改为 `log1p(avg_iei)`**（城市级平均 Inter-Event Interval），原因：avg_lag 对老项目天然偏大（项目年龄混淆），IEI 仅衡量该城市相对于前一个采纳城市的响应速度，与 Step 11 Model D-reg-IEI 保持因变量一致，方法论层次更清晰。IEI 计算：按 project_id + 采纳月份排序，取相邻采纳城市的月数差，过滤 lag>0 & interval≥0 事件后按城市取均值。原 adoption breadth 模型降级为 Appendix 10.4b。
 
 **关键发现**：
 - **Models A/B（origination）**：`log_entity`（开发者基数）和 `log_degree`（网络中心性）是最强预测变量。`log_degree` 对 origination 为负效应 → 高连接城市更善于采用而非发起
-- **Model C（速度）**：仅 `log_gdp` 显著（coef=-0.146, p=0.018，负系数 → 更富裕城市采纳更快）。网络指标和其他外部属性均不显著 → **城市均值上的采纳速度**弱解释，与 **Step 11 V1.5**（事件级 XGBoost + IEI + 项目属性，**CV R²≈0.31**，SHAP 项目侧主导、`betweenness` 在 IEI 下更突出）在**实质性结论**上一致：项目异质性是关键
+- **Model C（IEI 速度）**：结果待重算，预期方向与 avg_lag 版相近；DV 改为 IEI 后消除了项目年龄混淆，与 **Step 11 V1.5**（事件级 XGBoost + IEI，**CV R²≈0.31**，SHAP 项目侧主导）在因变量定义和结论层面更一致。两层均支持：采纳时机**主要由项目异质性驱动**，城市特征为边际信号
 - 外部属性（education、internet、R&D、research_capacity）在所有主模型中均不显著 → 网络结构比城市静态属性更重要
 - **Adoption speed null finding 的学术价值**：开放 AI 项目在全球城市间的扩散在速度维度上是相对平等的，即使在广度和发起能力上高度集中
 
@@ -836,11 +922,11 @@ lag 要按下面方式计算：
 - **10.4b Tautology 量化（Appendix）**：adoption breadth model R²=0.970；仅用外生变量 R²=0.737 → 循环变量贡献 24.0% R²。证实速度模型更合理
 - **10.5b 局限性讨论**：内生性/tautology、截面因果限制、样本量约束、网络密度对 betweenness 的影响、adoption speed null finding
 - **10.5c Region FE 检验**：加入区域固定效应后核心结论不变
-- **10.5d 正则化稳健性检验（V1.2 新增）**：Ridge/Lasso/ElasticNet 5-fold CV 对比 OLS。log(adoption) Lasso CV R²=0.62 优于 OLS 的 0.60，系数稳定；originator_share 和 log(avg_lag) 所有方法均 CV R²<0。Lasso 特征选择将 betweenness 收缩为零。含 Ridge/Lasso 系数对比可视化
+- **10.5d 正则化稳健性检验（V1.2 新增）**：Ridge/Lasso/ElasticNet 5-fold CV 对比 OLS。log(adoption) Lasso CV R²=0.62 优于 OLS 的 0.60，系数稳定；originator_share 和 log(avg_iei) 所有方法均 CV R²<0（与 avg_lag 版结论一致）。Lasso 特征选择将 betweenness 收缩为零。含 Ridge/Lasso 系数对比可视化
 
 **已删除的冗余模块（V1.2 精简）**：
 - ~~10.2b 项目固定效应~~：Conditional Logit with project FE 核心结论与 pooled Model A 完全一致，但 85% 的项目因无 outcome 变异被排除
-- ~~10.4c 网络密度检验~~：该检验验证的是旧 DV（adoption_count），与新 Model C（avg_lag）无关
+- ~~10.4c 网络密度检验~~：该检验验证的是旧 DV（adoption_count），与新 Model C（IEI）无关
 
 **与方案对比**：方案预期连续 lag 回归 + project FE。实际执行调整为三模型策略（logistic + share OLS/Beta + speed OLS），并将 DV 从 adoption breadth 调整为 adoption speed 以避免 tautology。V1.2 新增正则化稳健性检验（10.5d），从 Step 11 接收 Ridge/Lasso 代码，确保所有线性方法集中在 Step 10。
 
@@ -1431,8 +1517,8 @@ EDA 在正式建模之前完成，目的是理解数据质量、发现分布特�
 3. 可加入项目固定效应或项目控制变量
 
 **实际执行（`step10_adoption_regression.ipynb`，28 cells）**：
-- 三模型策略：Model A (Logistic, n=39,158), Model B (OLS originator_share, n=148), Model C (OLS log_avg_lag, n=148)
-- Model C DV 从 adoption breadth 调整为 adoption speed（log_avg_lag），直接回答"更快采纳"的 RQ
+- 三模型策略：Model A (Logistic, n=39,158), Model B (OLS originator_share, n=148), Model C (OLS log1p(avg_iei), n=148)
+- Model C DV 经两次调整：adoption breadth → log(avg_lag) → **log1p(avg_iei)**，消除项目年龄混淆，与 Step 11 IEI 因变量一致
 - 核心发现：log_entity 是最强预测因子；log_degree 对 adoption 正效应、对 originator 概率负效应；采纳速度仅与 GDP 显著相关（速度主要受项目异质性驱动）
 - **Robustness Checks**：(10.3b) Beta 回归；(10.4b) 内生性检验（Appendix）；(10.5c) Region FE；**(10.5d) Ridge/Lasso/ElasticNet 正则化稳健性（V1.2 新增，从 Step 11 移入）** → 核心结论稳健
 
