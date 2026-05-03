@@ -571,11 +571,11 @@ K-means 在所有 prominent open-AI projects 聚合形成的城市层指标上�
 | 3 | `betweenness` | log1p(×1000) | 桥梁/中介角色 | — (原始) | Balland & Boschma (2021) |
 | 4 | `origination_rate_pop` | log1p | 人均创新强度 | — (原始) | Wachs et al. (2022) |
 | 5 | **`avg_iei`** | log1p | 采纳速度（IEI，控制项目年龄混淆；与 §7.3 / §11 因变量一致） | ~0.7 (origination)（待重算） | Rogers (2003); Balland et al. (2020) |
-| 6 | **`lag_std`** | log1p | 采纳时间一致性 | ~0.7 (avg_iei)（待重算） | Lamba et al. (2020) |
+| 6 | **`iei_std`** | log1p | 采纳时序离散度（IEI 标准差；peer-relative 扩散速度的分散程度） | ~0.7 (avg_iei)（待重算） | Lamba et al. (2020) |
 | 7 | **`cross_region_ratio`** | 无 (已 [0,1]) | 协作地理广度（跨洲占比） | 0.326 (orig_rate_pop) | Balland & Boschma (2021) |
 | 8 | **`pop_top25_share`** | 无 (已 [0,1]) | 高影响力项目参与率 | 0.349 (orig_rate_pop) | Nature Global Innovation Hubs (2025) |
 | 9 | **`orig_top25_share`** | 无 (已 [0,1]) | 创始项目质量 | 0.135 (adoption) | Feldman & Audretsch (1999) |
-| 10 | **`lag_quality_corr`** | 无 (已连续) | 趋势引领 vs 追随 | 0.177 (cross_region) | Rogers (2003) adopter categories |
+| 10 | **`iei_quality_corr`** | 无 (已连续) | IEI–热度相关（peer-relative 速度 vs 项目流行度分位数；负=趋势引领） | 0.177 (cross_region)（待重算） | Rogers (2003) adopter categories |
 | 11 | **`avg_fork_star_ratio`** | 无 (已连续) | 项目实用深度 (fork/star) | 0.290 (origination) | 开源软件实用性度量文献 |
 
 #### 5.1.4c 特征构造：五张核心 CSV 数据字典（Variable / Type / Definition）
@@ -665,11 +665,11 @@ K-means 在所有 prominent open-AI projects 聚合形成的城市层指标上�
 | `prominent_flag` | Binary | 本表仅保留 **prominent_flag = 1** 的重要项目。 |
 
 **新增特征构造方法**：
-- #5–6：从 `city_project_adoption_events.csv` 按城市聚合 lag 的均值和标准差
+- #5–6：从 `city_project_adoption_events.csv` 按城市聚合 IEI（inter-event interval）的均值（avg_iei）和标准差（iei_std）；IEI 定义与 §7.3/§11 一致（lag>0, interval≥0）
 - #7：从 `city_collaboration_edges.csv` 计算每个城市跨洲协作权重占总协作权重的比例
 - #8：项目流行度在平台内做百分位排名（GitHub 用 stars, HuggingFace 用 downloads），计算每城市参与项目中 top-25% 占比
 - #9：同上，但仅限 `is_originator=1` 的事件（origination_count<5 的城市填充全局均值以抑制小样本极端值）
-- #10：每个城市内部计算 lag 与 popularity_pctile 的 Pearson 相关系数（负值=趋势引领，正值=趋势追随）
+- #10：每个城市内部计算 IEI（interval）与 popularity_pctile 的 Pearson 相关系数（负值=对热门项目响应更快，趋势引领；正值=趋势追随）；使用相同 IEI 筛选条件（lag>0, interval≥0），最小事件数阈值 n≥5
 - #11：GitHub 项目的 forks/stars 比值按城市取均值（高值=项目被实际 fork/修改多，实用性强）
 
 #### 多重共线性诊断（VIF）与 `weighted_degree` 移除
@@ -696,11 +696,11 @@ K-means 在所有 prominent open-AI projects 聚合形成的城市层指标上�
 | `log_avg_iei` | 5.55 | ⚠️ 可接受（原 avg_lag，待重算） |
 | `log_betweenness` | 4.86 | ✅ |
 | `log_orig_rate` | 2.94 | ✅ |
-| `log_lag_std` | 3.07 | ✅ |
+| `log_iei_std` | 3.07 | ✅（待重算） |
 | `cross_region` | 1.30 | ✅ |
 | `pop_top25` | 1.50 | ✅ |
 | `orig_top25` | 1.10 | ✅ |
-| `lag_quality_corr` | 1.21 | ✅ |
+| `iei_quality_corr` | 1.21 | ✅（待重算） |
 | `fork_star` | 1.27 | ✅ |
 
 #### 特征方案对比实验（K-Means k=2-8）
@@ -710,7 +710,7 @@ K-means 在所有 prominent open-AI projects 聚合形成的城市层指标上�
 | 方案 | 维度 | 说明 | k=3 sil | k=4 sil | k=5 sil |
 |---|---|---|---|---|---|
 | F: 原始 5D | 5 | origination/adoption/degree/betweenness/orig_rate | **0.386** | **0.348** | **0.377** |
-| G: 5D+3 best | 8 | F + avg_lag/cross_region/lag_quality_corr | 0.247 | 0.257 | **0.277** |
+| G: 5D+3 best | 8 | F + avg_iei/cross_region/iei_quality_corr | 0.247 | 0.257 | **0.277** |
 | B: 11D (无 degree) | 11 | **最终方案** | 0.191 | 0.163 | 0.161 |
 | A: 12D full | 12 | 含 degree（VIF 问题） | 0.171 | 0.168 | 0.167 |
 | D: 10D (无 deg+betw) | 10 | 过度移除 | 0.208 | 0.148 | 0.164 |
@@ -805,7 +805,7 @@ K-means 在所有 prominent open-AI projects 聚合形成的城市层指标上�
 | `orig_adopt_overlap` | 创始-采纳项目重叠率 | 全部为 0，无区分力 | — |
 | `hf_share` | HuggingFace 占比 | median=0，大多数城市无 HF 参与，太偏态 | 0.674 |
 | `platform_count` | 参与平台数 (1 or 2) | 二元变量，K-Means 不适合 | — |
-| `lag_quality_corr` (已保留) | — | — | — |
+| `lag_quality_corr` (已移除，替换为 `iei_quality_corr`) | — | — | — |
 | `avg_fork_star_ratio` (已保留) | — | — | — |
 
 ### ✅ 5.1.5 参数敏感性与替代模型对比（Step 9 扩展，§9.6–9.9）
@@ -1042,6 +1042,116 @@ Addresses: RQ4（协作网络预测下一波 adopter 城市），对应 Step12 G
 - 分类任务上 MLP AUC ≈ GraphSAGE AUC，说明二分类过于简单，图结构无额外增益
 
 **与方案对比**：方案原定预测"是否成为新 adopter"的二分类；实际调整为"采用强度"的回归+分类双任务 + MLP 消融基线，避免了全城市均为 adopter 导致的标签无区分问题。V1.2 版本修复了特征泄漏（全时段 adoption_count 等改为训练期活动特征）、增加了验证集与 early stopping、并通过 MLP 消融实验量化了图结构的增量贡献。
+
+### 5.4.6 扩展方案：滑动窗口 GraphSAGE（12 个月窗口 → 预测下半年采纳）
+
+> **状态**：🔲 待实施。现有 §5.4.5 cutoff 方案保留为 baseline，本方案作为扩展对比。
+
+#### 5.4.6a 设计动机
+
+§5.4.5 的 cutoff 方案在 **1 张静态图**（148 节点）上做节点级预测，训练集仅 88 个节点、测试集仅 30 个节点。该小样本量导致：(1) 模型评估统计功效弱，单个异常城市即可大幅影响 R²/AUC；(2) 无法评估模型的时序泛化能力；(3) 图结构存在 transductive 泄漏（test 节点在训练时参与消息传递）。
+
+滑动窗口方案旨在解决上述三个问题：通过将不同时段的图作为独立样本，将有效样本量从 148 提升至 ~6,000+；通过按时间划分 train/val/test，严格尊重因果顺序；每个窗口的图在训练/测试时完全独立，消除 transductive 泄漏。
+
+#### 5.4.6b 窗口与预测期设计
+
+| 参数 | 取值 | 理由 |
+|------|------|------|
+| **特征窗口** | 12 个月 | 足够构建出密度适中的协作图（约为全量图的 50–80% 边数），使 GraphSAGE 邻居聚合有意义；同时避免窗口过长导致特征过于平滑 |
+| **预测期** | 下半年（6 个月） | 每城市每窗口平均目标值 ~26 个采纳事件，零值占比预估 <10%，分布有足够离散度支撑回归和多分类任务 |
+| **滑动步长** | 1 个月 | 最大化窗口数量，提升样本量 |
+
+假设数据覆盖约 60 个月（202201–202512），可生成约 (60 − 12 − 6) = **42 个时间窗口**，每个窗口包含 148 个城市节点，总样本量 42 × 148 ≈ **6,216 个 (窗口, 城市) 样本**。
+
+**每个窗口的具体构造**：
+
+以窗口 w 为例（特征期 [t, t+11]，预测期 [t+12, t+17]）：
+1. **图结构**：从 `city_collaboration_edges_monthly.csv` 中筛选 `month ∈ [t, t+11]`，按 `(source_city, target_city)` 聚合 `edge_weight`，构建该窗口的无向协作图
+2. **节点特征**：
+   - **A 组 – 外生/时不变特征**（6 维）：`population_million`, `gdp_per_capita`, `education_tertiary_pct`, `internet_users_pct`, `rd_expenditure_pct`, `research_capacity`（与 cutoff 方案相同）
+   - **B 组 – 窗口期活动特征**（4 维）：`window_adopt_count`, `window_orig_count`, `window_weighted_degree`, `window_entity_count`——仅用 [t, t+11] 内的数据计算，无泄漏
+   - **C 组 – 时间编码**（2 维，**新增**）：`window_start_norm`（窗口起始月在整个时间轴上的归一化位置，∈ [0, 1]）和 `window_end_norm`（窗口结束月归一化位置）。时间编码使模型能区分不同时期的图，捕捉 AI 生态的结构性变化（如 2023 年 ChatGPT 引发的采纳加速）
+   - 合计 **12 维**节点特征，经 `StandardScaler` 标准化（scaler 仅在训练集窗口上 fit，apply 到 val/test 窗口）
+3. **回归目标 (G1-SW)**：`y_reg = log1p(该城市在 [t+12, t+17] 的采纳事件数量)`
+4. **分类目标 (G2-SW)**：基于训练集三分位数的 3 级分类（见 §5.4.6c）
+
+#### 5.4.6c 多分类方案：基于训练集三分位数
+
+将分类任务从 cutoff 方案的**二分类**（中位数分割 high/low）扩展为**三分类**，按训练集分位数划分：
+
+| 等级 | 定义 | 含义 |
+|------|------|------|
+| Low | 目标值 < P33（训练集） | 低采纳城市：该窗口半年内采纳活动少 |
+| Medium | P33 ≤ 目标值 < P66 | 中等采纳城市 |
+| High | 目标值 ≥ P66（训练集） | 高采纳城市：该窗口半年内采纳活跃 |
+
+**关键实现细节**：
+- 分位数阈值 P33 和 P66 **仅从训练集**的所有 (窗口, 城市) 样本中计算
+- 同一套阈值直接应用于 val/test 样本——test 中的类别比例可能不严格为 1:1:1（尤其在分布漂移场景下），这本身就是模型泛化能力的检验
+
+#### 5.4.6d 训练/验证/测试集按时间划分
+
+采用**严格时间顺序划分**，确保因果性：
+
+| 子集 | 时间范围（窗口起始月） | 窗口数（约） | 样本量（约） | 比例 |
+|------|---------------------|------------|------------|------|
+| **Train** | 前 60% 窗口 | ~25 | ~3,700 | 60% |
+| **Val** | 中 20% 窗口 | ~8 | ~1,200 | 20% |
+| **Test** | 后 20% 窗口 | ~9 | ~1,300 | 20% |
+
+**与现有 cutoff 方案按节点划分的对比**：
+
+| 维度 | 按节点划分（cutoff 方案） | 按时间划分（滑动窗口方案） |
+|------|------------------------|------------------------|
+| **测试的问题** | 能否预测**未见过的城市**的采纳量？ | 能否预测**未来时段**所有城市的采纳量？ |
+| **训练集大小** | 88 节点 | ~3,700 样本（↑ ~40 倍） |
+| **测试集大小** | 30 节点 | ~1,300 样本（↑ ~40 倍） |
+| **图结构泄漏** | 存在（test 节点在训练时参与消息传递） | 不存在（test 时段的图在训练时完全不可见） |
+| **时间泄漏** | 不存在（单一 cutoff） | 不存在（严格时间顺序） |
+| **时序泛化测试** | 无 | 有 |
+| **主要风险** | 统计功效不足 | 分布漂移（AI 采纳加速可能导致后期分布与前期不同） |
+| **更契合的 RQ** | "新城市加入网络时的预测" | "按时间推移做持续预测"（**更符合 RQ4**） |
+
+#### 5.4.6e 模型架构与训练方式
+
+**架构**：与 cutoff 方案完全相同的 GraphSAGE 2-layer + Linear head，不更换架构。
+
+**训练方式**：共享一个 GraphSAGE 模型，每个时间窗口构建一个独立的 PyG `Data` 对象（含该窗口的 `edge_index`、`x`、`y`）。训练时：
+1. 每个 epoch 遍历所有 train 窗口的图
+2. 对每个图做前向传播，计算所有 148 个节点的损失
+3. 累积所有 train 窗口的损失后反向传播更新参数
+4. Val 窗口用于 early stopping（patience = 20，与 cutoff 方案一致）
+
+PyG 的 `DataLoader` 天然支持多图 batching，无需架构修改，仅需数据准备层面的改动。
+
+**隐含假设**：模型参数跨窗口共享，假设"城市特征 + 网络结构 → 未来采纳量"的映射机制是**时间不变的**。时间编码特征（C 组）作为显式输入，允许模型学到不同时期的系统性差异，部分缓解此假设的刚性。
+
+#### 5.4.6f MLP 消融基线
+
+与 cutoff 方案一致，训练同构 2 层 MLP（无图传播）作为消融基线，量化图结构增量 ΔR²。滑动窗口方案中每窗口图更稀疏（仅 12 个月的边），图结构增量是否仍然显著是重要的验证点。
+
+#### 5.4.6g 预期产出与对比分析
+
+最终论文将呈现两种方案的对比结果：
+
+| 指标 | Cutoff 方案 | 滑动窗口方案 |
+|------|-----------|------------|
+| G1 回归 R² / RMSE | 已有 | 待实施 |
+| G2 分类 AUC / F1 | 已有（二分类） | 待实施（三分类） |
+| MLP 消融 ΔR² | 已有 (+0.145) | 待实施 |
+| 测试样本量 | 30 | ~1,300 |
+| 统计显著性检验 | 受限 | 充分 |
+
+**两种方案的互补价值**：
+- Cutoff 方案：baseline，展示静态图上的预测能力上限
+- 滑动窗口方案：展示模型的时序泛化能力和对动态网络的适应性
+
+#### 5.4.6h 局限性
+
+1. **分布漂移**：AI 采纳在 2023–2024 因 ChatGPT 等事件可能出现结构性突变，早期学到的模式可能不完全适用于晚期。论文中需讨论此风险，并可通过对比不同时段的 per-window 指标来量化
+2. **窗口重叠**：相邻窗口共享 11 个月的特征数据和 5 个月的目标数据，样本间自相关性高。时间划分 train/val/test 可缓解（不同子集间窗口不重叠），但 train 内部窗口仍有重叠
+3. **图密度下降**：12 个月窗口的图可能仅有全量图 50–80% 的边，部分城市可能成为孤立节点。GraphSAGE 对孤立节点退化为 MLP，图结构增量可能下降
+4. **时间编码的局限性**：2 维时间编码只能捕捉线性时间趋势，无法建模复杂的季节性或突变。若需更强的时序建模能力，需引入时序 GNN 架构（如 EvolveGCN），但这超出当前 GraphSAGE 框架
 
 ## 5.5 Method 5: 技术类型交互回归（Step 13, RQ5）
 
