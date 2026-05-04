@@ -356,7 +356,7 @@ def _build_target_repo_set():
     target city.  Repos with no target-city contributor are skipped
     to save ~30% of API calls.  Pure local computation.
     """
-    from step3b_clean_and_map_locations import (
+    from step_06_clean_map_locations import (
         _build_city_dict, clean_location, match_city,
     )
     from config import DATA_PROCESSED
@@ -615,7 +615,7 @@ def main():
     if shard_id:
         print(f"Shard {shard_id}/{shard_total} complete.")
         if shard_total > 1:
-            print("After ALL shards finish, run:  python step4_fetch_contributors.py --merge")
+            print("After ALL shards finish, run:  python step_09_contributors_participation.py --merge")
     else:
         print("Step 4 complete. Ready for step 5 (build core tables).")
     print("=" * 60)

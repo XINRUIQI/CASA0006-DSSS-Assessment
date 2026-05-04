@@ -1,6 +1,0 @@
-requests
-pandas
-huggingface_hub
-networkx
-numpy
-xgboost

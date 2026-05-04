@@ -1,0 +1,149 @@
+city,country,startup_ecosystem_rank,patent_applications_pc,qs_cs_rank,ef_epi_score
+Beijing,China,8,652,20,520
+San Francisco,United States,1,880,5,570
+Shanghai,China,11,652,32,520
+New York,United States,2,880,18,570
+London,United Kingdom,2,340,11,570
+Seattle,United States,20,880,28,570
+Hangzhou,China,24,652,48,520
+Paris,France,14,330,50,524
+Bengaluru,India,15,40,22,490
+Singapore,Singapore,12,1200,6,609
+Tokyo,Japan,10,1913,28,454
+Shenzhen,China,27,652,55,520
+Berlin,Germany,7,657,65,598
+Seoul,South Korea,9,3783,25,523
+Toronto,Canada,18,350,16,570
+Hong Kong,China,36,652,32,520
+Boston,United States,6,880,1,570
+Munich,Germany,33,657,45,598
+Austin,United States,22,880,30,570
+Los Angeles,United States,4,880,15,570
+Zurich,Switzerland,31,1235,9,550
+Cambridge,United Kingdom,6,340,1,570
+Amsterdam,Netherlands,17,453,38,636
+Guangzhou,China,42,652,55,520
+Vancouver,Canada,34,350,40,570
+Montreal,Canada,39,350,45,570
+Chicago,United States,21,880,22,570
+Pune,India,75,40,100,490
+Chengdu,China,48,652,65,520
+Sydney,Australia,23,350,33,570
+Mountain View,United States,1,880,3,570
+Mumbai,India,37,40,75,490
+Pittsburgh,United States,47,880,2,570
+Nanjing,China,52,652,55,520
+San Jose,United States,1,880,3,570
+Barcelona,Spain,53,65,80,538
+Hyderabad,India,68,40,85,490
+Atlanta,United States,45,880,28,570
+Melbourne,Australia,32,350,32,570
+Taipei,Taiwan,35,3200,38,535
+Stockholm,Sweden,13,576,45,608
+Palo Alto,United States,1,880,3,570
+Madrid,Spain,55,65,85,538
+Wuhan,China,55,652,60,520
+Redmond,United States,1,880,28,570
+Warsaw,Poland,58,135,100,588
+Sao Paulo,Brazil,42,20,150,466
+New Delhi,India,72,40,65,490
+San Diego,United States,19,880,35,570
+Chennai,India,78,40,80,490
+Vienna,Austria,56,362,80,600
+Portland,United States,52,880,65,570
+Washington,United States,42,880,35,570
+Hamburg,Germany,48,657,80,598
+Moscow,Russia,52,185,80,532
+Sunnyvale,United States,1,880,3,570
+Delhi,India,72,40,65,490
+Prague,Czech Republic,61,200,105,567
+Istanbul,Turkey,60,90,150,497
+Dublin,Ireland,28,140,80,570
+Kolkata,India,88,40,110,490
+Lisbon,Portugal,55,45,90,605
+Denver,United States,46,880,70,570
+Milan,Italy,52,75,90,528
+Dubai,United Arab Emirates,55,145,130,489
+Dallas,United States,49,880,60,570
+Philadelphia,United States,25,880,22,570
+Houston,United States,48,880,55,570
+Lagos,Nigeria,80,3,350,530
+Copenhagen,Denmark,26,544,50,603
+Ottawa,Canada,60,350,55,570
+Tel Aviv,Israel,4,1500,100,522
+Rome,Italy,68,75,110,528
+Suzhou,China,58,652,75,520
+Raleigh,United States,44,880,45,570
+Oxford,United Kingdom,38,340,4,570
+Xi'an,China,65,652,70,520
+Hefei,China,68,652,70,520
+Helsinki,Finland,29,750,55,590
+Miami,United States,16,880,55,570
+Lyon,France,60,330,90,524
+Edinburgh,United Kingdom,42,340,17,570
+Oslo,Norway,32,580,95,610
+Buenos Aires,Argentina,50,15,175,562
+Budapest,Hungary,60,80,125,585
+Lausanne,Switzerland,38,1235,10,550
+Bangkok,Thailand,70,22,90,415
+Athens,Greece,72,40,110,602
+Boulder,United States,55,880,55,570
+Brisbane,Australia,65,350,70,570
+Waterloo,Canada,18,350,38,570
+Ankara,Turkey,80,90,175,497
+Cairo,Egypt,85,8,200,465
+Cupertino,United States,1,880,3,570
+Ho Chi Minh City,Vietnam,78,8,130,498
+Frankfurt,Germany,45,657,75,598
+Auckland,New Zealand,58,280,85,570
+Hanoi,Vietnam,80,8,125,498
+Minneapolis,United States,50,880,50,570
+Rio de Janeiro,Brazil,58,20,190,466
+Cologne,Germany,58,657,85,598
+Santiago,Chile,60,45,165,525
+Abu Dhabi,United Arab Emirates,65,145,140,489
+Tianjin,China,62,652,65,520
+Manchester,United Kingdom,48,340,55,570
+Nairobi,Kenya,70,5,320,581
+Ann Arbor,United States,58,880,38,570
+Phoenix,United States,60,880,70,570
+Jakarta,Indonesia,78,10,120,468
+Toulouse,France,62,330,95,524
+Stuttgart,Germany,55,657,75,598
+Bucharest,Romania,78,35,150,593
+Cape Town,South Africa,72,25,250,594
+Brussels,Belgium,48,380,48,592
+Calgary,Canada,65,350,70,570
+Perth,Australia,70,350,90,570
+Daejeon,South Korea,62,3783,35,523
+Salt Lake City,United States,62,880,65,570
+Geneva,Switzerland,42,1235,80,550
+Bristol,United Kingdom,55,340,70,570
+Heidelberg,Germany,65,657,75,598
+Edmonton,Canada,68,350,65,570
+Kuala Lumpur,Malaysia,68,120,80,566
+Lima,Peru,80,10,250,519
+Dalian,China,72,652,85,520
+Delft,Netherlands,52,453,38,636
+Rotterdam,Netherlands,55,453,45,636
+Osaka,Japan,45,1913,50,454
+Turin,Italy,65,75,100,528
+Gothenburg,Sweden,55,576,55,608
+Eindhoven,Netherlands,50,453,50,636
+Saint Petersburg,Russia,68,185,110,532
+Grenoble,France,58,330,80,524
+Riyadh,Saudi Arabia,70,55,150,417
+Detroit,United States,72,880,65,570
+Kyoto,Japan,50,1913,48,454
+Johannesburg,South Africa,78,25,280,594
+Hsinchu,Taiwan,55,3200,50,535
+Canberra,Australia,75,350,80,570
+Mexico City,Mexico,55,20,160,459
+Krakow,Poland,78,135,120,588
+Nagoya,Japan,58,1913,60,454
+Busan,South Korea,70,3783,70,523
+Haifa,Israel,65,1500,100,522
+Jerusalem,Israel,68,1500,115,522
+Tsukuba,Japan,62,1913,65,454
+Manila,Philippines,85,7,150,570
+Bogota,Colombia,70,12,220,485

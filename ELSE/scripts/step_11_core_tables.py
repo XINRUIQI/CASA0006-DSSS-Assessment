@@ -46,7 +46,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from config import DATA_RAW, DATA_PROCESSED, DATA_OUTPUT
 
 # We need the cleaning functions from step3b to map new contributors
-from step3b_clean_and_map_locations import (
+from step_06_clean_map_locations import (
     _build_city_dict, clean_location, match_city, CITY_DICT
 )
 
